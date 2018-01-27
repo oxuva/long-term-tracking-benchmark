@@ -1,0 +1,21 @@
+body {
+/*font-family: 'Cousine', ;*/
+/*        font-family: 'Cutive Mono', ;*/
+font-family: 'Open Sans', sans-serif;
+font-size: 20px;
+}
+
+a:link {
+    color: #2980b9;
+    text-decoration:none;
+}
+
+a:visited {
+    color: #2980b9;
+    text-decoration:none;
+}
+
+a:hover {
+    color: #2980b9;
+    text-decoration:underline;
+}
