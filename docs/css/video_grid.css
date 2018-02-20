@@ -5,8 +5,12 @@ body {
   font-family: sans-serif;
 }
 
-h1 {
+h1{
 	text-align: center;
+}
+
+h4{
+  text-align: center;
 }
 
 div {
@@ -14,7 +18,7 @@ div {
   flex-wrap: wrap;
 }
 
-a {
+.youtube {
   display: inline-block;
   margin-bottom: 8px;
   width: calc(50% - 4px);
@@ -23,20 +27,20 @@ a {
   color: black;
 }
 
-a:nth-of-type(2n) {
+.youtube:nth-of-type(2n) {
   margin-right: 0;
 }
 
 @media screen and (min-width: 50em) {
-  a {
+  .youtube {
     width: calc(25% - 6px);
   }
   
-  a:nth-of-type(2n) {
+  .youtube:nth-of-type(2n) {
     margin-right: 8px;
   }
   
-  a:nth-of-type(4n) {
+  .youtube:nth-of-type(4n) {
     margin-right: 0;
   }
 }
