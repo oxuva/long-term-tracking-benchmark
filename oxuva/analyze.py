@@ -23,7 +23,8 @@ def _add_arguments(parser):
     parser.add_argument('--iou_threshold', type=float, default='0.5')
     parser.add_argument('--min_time', type=float, help='(seconds)')
     parser.add_argument('--verbose', action='store_true')
-    parser.add_argument('--permissive', action='store_true')
+    parser.add_argument('--permissive', action='store_true',
+                        help='Silently exclude tracks which caused an error')
 
 
 def main():
@@ -48,9 +49,13 @@ def main():
     quality = {}
     for tracker_ind, tracker in enumerate(trackers):
         tracker_pred_dir = os.path.join(args.pred_dir, tracker)
-        quality[tracker] = _load_predictions_and_measure_quality(
-            tracks, tracker_pred_dir=os.path.join(args.pred_dir, tracker),
-            log_prefix='tracker {}/{} {}: '.format(tracker_ind+1, len(trackers), tracker))
+        try:
+            quality[tracker] = _load_predictions_and_measure_quality(
+                tracks, tracker_pred_dir=os.path.join(args.pred_dir, tracker),
+                log_prefix='tracker {}/{} {}: '.format(tracker_ind+1, len(trackers), tracker))
+        except Exception, exc:
+            print('warning: skip tracker {}: {}'.format(tracker, str(exc)), file=sys.stderr)
+            continue
 
     _print_statistics(quality)
 
@@ -82,9 +87,9 @@ def _load_predictions_and_measure_quality(tracks, tracker_pred_dir, log_prefix='
                 iou_threshold=args.iou_threshold,
                 min_time=None if args.min_time is None else args.min_time * FPS,
                 log_prefix='{}: '.format(log_context))
-        except IOError, ex:
+        except IOError, exc:
             if args.permissive:
-                print('warning: {}'.format(str(ex)), file=sys.stderr)
+                print('warning: exclude track {}: {}'.format(track_name, str(exc)), file=sys.stderr)
             else:
                 raise
     return quality

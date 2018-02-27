@@ -2,3 +2,5 @@
 docs/email_form.html
 workspace/annotations/test.csv
 workspace/predictions/
+*.swp
+*.swo
