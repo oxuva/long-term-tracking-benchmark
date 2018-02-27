@@ -30,3 +30,6 @@ The results table will be printed to `stdout` in CSV format.
 
 Use `--help` to discover the optional flags.
 For example, use `--iou_threshold=0.7` to generate the results with a stricter threshold (the default is 0.5).
+
+If you only want to evaluate a subset of trackers, you can specify them using the `--trackers` flag.
+For example, `--trackers siamfc sint`.
