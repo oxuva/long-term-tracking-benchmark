@@ -40,7 +40,7 @@ def main():
 
     trackers = args.trackers
     if not trackers:
-        trackers = _list_subdirs(args.pred_dir)
+        trackers = sorted(_list_subdirs(args.pred_dir))
         if args.verbose:
             print('found {} trackers: {}'.format(len(trackers), ', '.join(trackers)),
                   file=sys.stderr)
@@ -49,13 +49,9 @@ def main():
     quality = {}
     for tracker_ind, tracker in enumerate(trackers):
         tracker_pred_dir = os.path.join(args.pred_dir, tracker)
-        try:
-            quality[tracker] = _load_predictions_and_measure_quality(
-                tracks, tracker_pred_dir=os.path.join(args.pred_dir, tracker),
-                log_prefix='tracker {}/{} {}: '.format(tracker_ind+1, len(trackers), tracker))
-        except Exception, exc:
-            print('warning: skip tracker {}: {}'.format(tracker, str(exc)), file=sys.stderr)
-            continue
+        quality[tracker] = _load_predictions_and_measure_quality(
+            tracks, tracker_pred_dir=os.path.join(args.pred_dir, tracker),
+            log_prefix='tracker {}/{} {}: '.format(tracker_ind+1, len(trackers), tracker))
 
     _print_statistics(quality)
 

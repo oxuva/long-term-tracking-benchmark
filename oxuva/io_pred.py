@@ -38,10 +38,9 @@ def load_predictions_csv(fp):
     Returns:
         List of (time, prediction-dict) pairs.
     '''
-    has_header = csv.Sniffer().has_header(fp.read(4<<10)) # 4 kB
-    fp.seek(0)
-    reader = csv.DictReader(fp, fieldnames=None if has_header else PREDICTION_FIELD_NAMES)
-    assert set(reader.fieldnames) == set(PREDICTION_FIELD_NAMES)
+    # has_header = csv.Sniffer().has_header(fp.read(4<<10)) # 4 kB
+    # fp.seek(0)
+    reader = _dict_reader_optional_fieldnames(fp, PREDICTION_FIELD_NAMES)
 
     preds = []
     for row in reader:
@@ -57,6 +56,23 @@ def load_predictions_csv(fp):
         t = int(row['frame_num'])
         preds.append((t, frame))
     return preds
+
+
+def _dict_reader_optional_fieldnames(fp, fieldnames):
+    '''Creates a csv.DictReader with the given fieldnames.
+
+    The file may or may not contain a header row.
+    If it contains a header row, it must match fieldnames.
+
+    This function exists because csv.Sniffer() is unreliable.
+    For example, it may fail if one row uses int and one row uses float.
+    '''
+    # Try to read headers from file.
+    reader = csv.DictReader(fp, fieldnames=None)
+    if set(reader.fieldnames) != set(fieldnames):
+        fp.seek(0)
+        reader = csv.DictReader(fp, fieldnames=fieldnames)
+    return reader
 
 
 def dump_predictions_csv(vid_id, obj_id, predictions, fp):
