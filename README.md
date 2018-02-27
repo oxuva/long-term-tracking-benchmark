@@ -9,7 +9,9 @@ It is necessary to add the parent of the `oxuva` directory to the `PYTHONPATH` e
 export PYTHONPATH=path/to/long-term-tracking-benchmark:$PYTHONPATH
 ```
 
-Then, for example, to run the analysis script:
+You can then run the scripts from anywhere, although we recommend to use `workspace` as the working directory.
+For example, to run the analysis script:
 ```bash
+cd path/to/long-term-tracking-benchmark/workspace
 python -m oxuva.analyze --help
 ```
