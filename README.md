@@ -29,7 +29,7 @@ python -m oxuva.analyze annotations/dev.csv predictions/dev/ --verbose
 The results table will be printed to `stdout` in CSV format.
 
 Use `--help` to discover the optional flags.
-For example, use `--iou_threshold=0.7` to generate the results with a stricter threshold (the default is 0.5).
+For example, you can use `--iou_thresholds 0.1 0.3 0.5 0.7 0.9` to generate the results with a wider range of thresholds (the default is `0.3 0.5 0.7`).
 
 By default, the set of trackers will be taken to be the subdirectories of the directory specified above (in this case, `predictions/dev`).
 If you only want to evaluate a subset of trackers, you can specify them using the `--trackers` flag.
