@@ -20,7 +20,8 @@ def _add_arguments(parser):
                         help='Directory that contains tracker/vidname_objname.csv')
     parser.add_argument('--trackers', nargs='+',
                         help='Default is all sub-directories of predictions/')
-    parser.add_argument('--iou_threshold', type=float, default='0.5')
+    parser.add_argument('--iou_thresholds', nargs='+', type=float,
+                        default=[0.3, 0.5, 0.7])
     parser.add_argument('--min_time', type=float, help='(seconds)')
     parser.add_argument('--verbose', action='store_true')
     parser.add_argument('--permissive', action='store_true',
@@ -67,7 +68,7 @@ def _load_predictions_and_measure_quality(tracks, tracker_pred_dir, log_prefix='
     Returns:
         Dictionary that maps (video_name, object_name) to track quality.
     '''
-    quality = {}
+    quality = {iou: {} for iou in args.iou_thresholds}
     for track_ind, (vid_obj, annot) in enumerate(tracks.items()):
         video_name, obj_name = vid_obj
         track_name = video_name + '_' + obj_name
@@ -79,10 +80,12 @@ def _load_predictions_and_measure_quality(tracks, tracker_pred_dir, log_prefix='
         try:
             with open(pred_file, 'r') as fp:
                 pred = io.load_predictions_csv(fp)
-            quality[vid_obj] = assess.measure_quality(annot['frames'], pred,
-                iou_threshold=args.iou_threshold,
-                min_time=None if args.min_time is None else args.min_time * FPS,
-                log_prefix='{}: '.format(log_context))
+            for iou in args.iou_thresholds:
+                quality[iou][vid_obj] = assess.measure_quality(
+                    annot['frames'], pred,
+                    iou_threshold=iou,
+                    min_time=None if args.min_time is None else args.min_time * FPS,
+                    log_prefix='{}: '.format(log_context))
         except IOError, exc:
             if args.permissive:
                 print('warning: exclude track {}: {}'.format(track_name, str(exc)), file=sys.stderr)
@@ -92,14 +95,18 @@ def _load_predictions_and_measure_quality(tracks, tracker_pred_dir, log_prefix='
 
 
 def _print_statistics(quality):
-    print(','.join(['tracker', 'tpr', 'tnr', 'geometric_mean']))
+    fieldnames = (['tracker', 'tnr'] +
+                  ['tpr_{}'.format(iou) for iou in args.iou_thresholds])
+    print(','.join(fieldnames))
     for tracker in sorted(quality.keys()):
-        stats = assess.statistics(quality[tracker].values())
-        print(','.join([
-            tracker,
-            '{:.6g}'.format(stats['TPR']),
-            '{:.6g}'.format(stats['TNR']),
-            '{:.6g}'.format(util.geometric_mean(stats['TPR'], stats['TNR']))]))
+        tprs = []
+        stats = {
+            iou: assess.statistics(quality[tracker][iou].values())
+            for iou in args.iou_thresholds}
+        first_iou = args.iou_thresholds[0]
+        row = ([tracker, '{:.6g}'.format(stats[first_iou]['TNR'])] +
+               ['{:.6g}'.format(stats[iou]['TPR']) for iou in args.iou_thresholds])
+        print(','.join(row))
 
 
 def _load_annotations(fname):
