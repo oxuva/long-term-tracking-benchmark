@@ -2,6 +2,8 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+from oxuva import util
+
 
 def measure_quality(gt, pred, iou_threshold, log_prefix='', **kwargs):
     '''Measures the quality of a single track.
@@ -53,6 +55,7 @@ def statistics(tracks_quality):
     else:
         raise ValueError('unable to compute TNR (no negatives)')
     # TODO: Add some errorbars?
+    total['GM'] = util.geometric_mean(total['TPR'], total['TNR'])
     return total
 
 

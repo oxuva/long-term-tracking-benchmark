@@ -2,7 +2,11 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import functools
+import json
 import numpy as np
+import os
+import pickle
 
 
 def str2bool(x):
@@ -36,3 +40,29 @@ def geometric_mean(*args):
     if any([x == 0 for x in args]):
         return 0.
     return np.asscalar(np.exp(np.mean(np.log(args))))
+
+
+def cache(protocol, filename, func, makedir=True):
+    '''Caches the result of a function in a file.
+
+    Args:
+        func -- Function with no arguments.
+    '''
+    if os.path.exists(filename):
+        with open(filename, 'r') as r:
+            result = protocol.load(r)
+    else:
+        if makedir:
+            if not os.path.exists(os.path.dirname(filename)):
+                os.makedirs(os.path.dirname(filename))
+        result = func()
+        try:
+            with open(filename, 'w') as w:
+                protocol.dump(result, w)
+        except:
+            os.remove(filename)
+            raise
+    return result
+
+cache_json = functools.partial(cache, json)
+cache_pickle = functools.partial(cache, pickle)
