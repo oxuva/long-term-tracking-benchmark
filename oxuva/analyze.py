@@ -38,8 +38,8 @@ def _add_arguments(parser):
                         default=[0.3, 0.5, 0.7])
 
     subparsers = parser.add_subparsers(dest='subcommand', help='Analysis mode')
-    # report: Produce a table (one column per IOU threshold)
-    report_parser = subparsers.add_parser('report', parents=[common])
+    # table: Produce a table (one column per IOU threshold)
+    table_parser = subparsers.add_parser('table', parents=[common])
     # plot: Produce a figure (one figure per IOU threshold)
     plot_parser = subparsers.add_parser('plot', parents=[common])
     # plot_parser.add_argument('--posthoc', action='store_true')
@@ -86,8 +86,8 @@ def main():
                     tracker_pred_dir=os.path.join(pred_dir, tracker),
                     log_prefix=log_context + ': '))
 
-    if args.subcommand == 'report':
-        _print_statistics(quality)
+    if args.subcommand == 'table':
+        _print_statistics(quality, tracker_names)
     elif args.subcommand == 'plot':
         for iou in args.iou_thresholds:
             _plot_statistics(quality, trackers, iou,
@@ -155,19 +155,27 @@ def _load_predictions_and_measure_quality(tracks, iou_threshold, tracker_pred_di
     return quality
 
 
-def _print_statistics(quality):
-    fieldnames = (['tracker', 'tnr'] +
-                  ['tpr_{}'.format(iou) for iou in args.iou_thresholds])
-    print(','.join(fieldnames))
-    for tracker in sorted(quality.keys()):
-        tprs = []
-        stats = {
-            iou: assess.statistics(quality[tracker][iou].values())
-            for iou in args.iou_thresholds}
-        first_iou = args.iou_thresholds[0]
-        row = ([tracker, '{:.6g}'.format(stats[first_iou]['TNR'])] +
-               ['{:.6g}'.format(stats[iou]['TPR']) for iou in args.iou_thresholds])
-        print(','.join(row))
+def _print_statistics(quality, names=None):
+    names = names or {}
+    table_dir = os.path.join('analysis', args.data, args.challenge)
+    _ensure_dir_exists(table_dir)
+    table_file = os.path.join(table_dir, 'table.txt')
+    if args.verbose:
+        print('write table to {}'.format(table_file), file=sys.stderr)
+    with open(table_file, 'w') as f:
+        fieldnames = (['tracker', 'tnr'] +
+                      ['tpr_{}'.format(iou) for iou in args.iou_thresholds])
+        print(','.join(fieldnames), file=f)
+        for tracker in sorted(quality.keys()):
+            tprs = []
+            stats = {
+                iou: assess.statistics(quality[tracker][iou].values())
+                for iou in args.iou_thresholds}
+            first_iou = args.iou_thresholds[0]
+            row = ([names.get(tracker, tracker),
+                       '{:.6g}'.format(stats[first_iou]['TNR'])] +
+                   ['{:.6g}'.format(stats[iou]['TPR']) for iou in args.iou_thresholds])
+            print(','.join(row), file=f)
 
 
 def _plot_statistics(quality, trackers, iou_threshold,
