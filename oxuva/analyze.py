@@ -80,7 +80,7 @@ def main():
             cache_file = os.path.join(
                 args.data, 'quality', '{}_{}.pickle'.format(tracker, iou))
             quality.setdefault(tracker, {})[iou] = util.cache_pickle(
-                os.path.join(args.cache_dir, cache_file),
+                os.path.join(args.cache_dir, 'analyze', cache_file),
                 lambda: _load_predictions_and_measure_quality(
                     tracks, iou,
                     tracker_pred_dir=os.path.join(pred_dir, tracker),
