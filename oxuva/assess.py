@@ -13,13 +13,22 @@ def measure_quality(gt, pred, iou_threshold, log_prefix='', **kwargs):
     Args:
         kwargs: For assess_predictions().
     '''
-    result = assess_predictions(gt, pred, iou_threshold, log_prefix=log_prefix, **kwargs)
+    assessment = assess_predictions(gt, pred, iou_threshold, log_prefix=log_prefix, **kwargs)
+    return summarize_sequence(assessment)
+
+
+def summarize_sequence(assessment):
+    '''Converts a per-frame assessment into a cumulative sequence assessment.
+
+    Args:
+        assessment -- Dictionary that maps t to a frame assessment dict.
+    '''
     quality = {
-        'len': len(result),
-        'TP': sum(x['TP'] for _, x in result.items()),
-        'TN': sum(x['TN'] for _, x in result.items()),
-        'FP': sum(x['FP'] for _, x in result.items()),
-        'FN': sum(x['FN'] for _, x in result.items()),
+        'len': len(assessment),
+        'TP': sum(x['TP'] for t, x in assessment.items()),
+        'TN': sum(x['TN'] for t, x in assessment.items()),
+        'FP': sum(x['FP'] for t, x in assessment.items()),
+        'FN': sum(x['FN'] for t, x in assessment.items()),
     }
     # Compute per-sequence statistics.
     # However, many sequences do not have any negative (absent frames).
@@ -48,14 +57,14 @@ def statistics(tracks_quality):
     num_neg = total['TN'] + total['FP']
     if num_pos > 0:
         total['TPR'] = float(total['TP']) / num_pos
-    else:
-        raise ValueError('unable to compute TPR (no positives)')
+    # else:
+    #     raise ValueError('unable to compute TPR (no positives)')
     if num_neg > 0:
         total['TNR'] = float(total['TN']) / num_neg
-    else:
-        raise ValueError('unable to compute TNR (no negatives)')
+    # else:
+    #     raise ValueError('unable to compute TNR (no negatives)')
     # TODO: Add some errorbars?
-    total['GM'] = util.geometric_mean(total['TPR'], total['TNR'])
+    total['GM'] = util.geometric_mean(total.get('TPR', 0.0), total.get('TNR', 0.0))
     return total
 
 
@@ -96,7 +105,7 @@ def subset_using_previous_if_missing(data, times):
 
 
 def assess_predictions(gt, pred, iou_threshold, min_time=None, max_time=None, log_prefix=''):
-    '''Compare predicted track to ground-truth annotations.
+    '''Evaluate predicted track against ground-truth annotations.
 
     Args:
         gt: List of (frame, annotation) pairs ordered by frame.
@@ -121,6 +130,8 @@ def assess_predictions(gt, pred, iou_threshold, min_time=None, max_time=None, lo
 
     Returns:
         An assessment of each frame with ground-truth.
+        This is a dictionary that maps time to an assessment dictionary,
+        which contains TP, FP, etc.
     '''
     # pred = dict(pred)
     t_first, gt_first = gt[0]

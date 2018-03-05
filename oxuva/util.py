@@ -42,26 +42,29 @@ def geometric_mean(*args):
     return np.asscalar(np.exp(np.mean(np.log(args))))
 
 
-def cache(protocol, filename, func, makedir=True):
+def cache(protocol, filename, func, makedir=True, ignore_existing=False):
     '''Caches the result of a function in a file.
 
     Args:
         func -- Function with no arguments.
+        makedir -- Create parent directory if it does not exist.
+        ignore_existing -- Ignore existing cache file and call function.
+            If it existed, the old cache file will be over-written.
     '''
-    if os.path.exists(filename):
+    if (not ignore_existing) and os.path.exists(filename):
         with open(filename, 'r') as r:
             result = protocol.load(r)
     else:
-        if makedir:
-            if not os.path.exists(os.path.dirname(filename)):
-                os.makedirs(os.path.dirname(filename))
+        dir = os.path.dirname(filename)
+        if makedir and (not os.path.exists(dir)):
+            os.makedirs(dir)
         result = func()
-        try:
-            with open(filename, 'w') as w:
-                protocol.dump(result, w)
-        except:
-            os.remove(filename)
-            raise
+        # Write to a temporary file and then perform atomic rename.
+        # This guards against partial cache files.
+        tmp = filename + '.tmp'
+        with open(tmp, 'w') as w:
+            protocol.dump(result, w)
+        os.rename(tmp, filename)
     return result
 
 cache_json = functools.partial(cache, json)
