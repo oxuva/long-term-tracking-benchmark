@@ -5,16 +5,16 @@ from __future__ import print_function
 from oxuva import util
 
 
-def measure_quality(gt, pred, iou_threshold, log_prefix='', **kwargs):
-    '''Measures the quality of a single track.
-
-    The quality is the total number of TP, TN, FP, FN.
-
-    Args:
-        kwargs: For assess_predictions().
-    '''
-    assessment = assess_predictions(gt, pred, iou_threshold, log_prefix=log_prefix, **kwargs)
-    return summarize_sequence(assessment)
+# def measure_quality(gt, pred, iou_threshold, log_prefix='', **kwargs):
+#     '''Measures the quality of a single track.
+#
+#     The quality is the total number of TP, TN, FP, FN.
+#
+#     Args:
+#         kwargs: For assess_sequence().
+#     '''
+#     assessment = assess_sequence(gt, pred, iou_threshold, log_prefix=log_prefix, **kwargs)
+#     return summarize_sequence(assessment)
 
 
 def summarize_sequence(assessment):
@@ -68,95 +68,82 @@ def statistics(tracks_quality):
     return total
 
 
-def subset_using_previous_if_missing(data, times):
+def subset_using_previous_if_missing(series, times):
     '''Extracts a subset of values at the given times.
     If there is no data for a particular time, then the last value is used.
 
     Args:
-        data: List of (time, x) pairs.
+        series: TimeSeries of data.
         times: List of times.
 
-    Example:
-        subset_using_previous_if_missing([(2, 'hi'), (4, 'bye')], [2, 3, 4, 5])
-        => ['hi', 'hi', 'bye', 'bye']
+    Returns:
+        Time series sampled at specified times.
+
+    Examples:
+        >> subset_using_previous_if_missing([(2, 'hi'), (4, 'bye')], [2, 3, 4, 5])
+        ['hi', 'hi', 'bye', 'bye']
+
+    Raises an exception if asked for a time before the first element in series.
     '''
-    # Assume that data is sorted by time.
+    assert isinstance(series, util.TimeSeries)
+    series = series.items()
     subset = [None for _ in times]
     t_curr, x_curr = None, None
     for i, t in enumerate(times):
-        # Read from data until we have read all elements <= t.
+        # Read from series until we have read all elements <= t.
         read_all = False
         while not read_all:
-            if len(data) == 0:
+            if len(series) == 0:
                 read_all = True
             else:
-                t_next, x_next = data[0]
+                t_next, x_next = series[0]
                 if t_next > t:
                     # We have gone past t.
                     read_all = True
                 else:
                     # Keep going.
                     t_curr, x_curr = t_next, x_next
-                    data = data[1:]
+                    series = series[1:]
         if t_curr is None:
             raise ValueError('no value for time: {}'.format(t))
         subset[i] = x_curr
-    return subset
+    return util.TimeSeries(zip(times, subset))
 
 
-def assess_predictions(gt, pred, iou_threshold, min_time=None, max_time=None, log_prefix=''):
+def assess_sequence(gt, pred, iou_threshold, log_prefix='', exclude_first=True):
     '''Evaluate predicted track against ground-truth annotations.
 
     Args:
-        gt: List of (frame, annotation) pairs ordered by frame.
+        gt: TimeSeries of annotation dicts.
             Each annotation is a dictionary with:
                 annot['present']: bool
                 annot['xmin']: float
                 annot['ymin']: float
                 annot['xmax']: float
                 annot['ymax']: float
-        pred: List of (frame, prediction) pairs ordered by frame.
+        pred: TimeSeries of prediction dicts.
             Each prediction is a dictionary with:
                 pred['present']: bool (or int)
                 pred['xmin']: float
                 pred['ymin']: float
                 pred['xmax']: float
                 pred['ymax']: float
-                pred['imwidth']: float
-                pred['imheight']: float
         iou_threshold: Threshold for determining true positive.
-        min_time, max_time: Consider frames in [min_time, max_time] (inclusive).
-            Use None to disable limit.
 
     Returns:
         An assessment of each frame with ground-truth.
         This is a dictionary that maps time to an assessment dictionary,
         which contains TP, FP, etc.
     '''
-    # pred = dict(pred)
-    t_first, gt_first = gt[0]
-    # Check that first GT frame (exemplar) has object "present".
-    if not gt_first['present']:
-        raise AssertionError('{}object not present in first frame; re-generate JSON file'.format(log_prefix))
-
-    # Exclude first frame from evaluation.
-    gt_subset = gt[1:]
-    times = [t for t, _ in gt_subset]
+    if not isinstance(gt, util.TimeSeries):
+        raise TypeError('type is not TimeSeries: {}'.format(type(gt)))
+    if not isinstance(pred, util.TimeSeries):
+        raise TypeError('type is not TimeSeries: {}'.format(type(gt)))
+    times = gt.keys()
+    if exclude_first:
+        times = times[1:]
     pred = subset_using_previous_if_missing(pred, times)
-
-    assess = {}
-    for (t, gt_t), pred_t in zip(gt_subset, pred):
-        if min_time is not None and (t - t_first) < min_time:
-            continue
-        if max_time is not None and (t - t_first) > max_time:
-            continue
-        assess[t] = assess_frame(gt_t, pred_t, iou_threshold)
-    # # Convert from list of dictionaries to dictionary of numpy arrays.
-    # return {
-    #     k: np.array([assess[t][k] for t, _ in gt['frames'])
-    #     for k in assess[0].keys()
-    # }
-    return assess
+    return util.TimeSeries({t: assess_frame(gt[t], pred[t], iou_threshold) for t in times})
 
 
 def assess_frame(gt, pred, iou_threshold):

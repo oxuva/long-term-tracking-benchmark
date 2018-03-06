@@ -26,10 +26,10 @@ def load_annotations_csv(fp):
         obj_id = row['object_id']
         rows_by_track.setdefault((vid_id, obj_id), []).append(row)
 
-    tracks = {}
+    tracks = util.VideoObjectDict()
     for vid_obj in rows_by_track.keys():
-        vid_id, obj_id = vid_obj
-        frames = []
+        # vid_id, obj_id = vid_obj
+        frames = util.TimeSeries()
         for row in rows_by_track[vid_obj]:
             present = _parse_is_present(row['object_presence'])
             # TODO: Support 'exemplar' field in CSV format?
@@ -39,31 +39,30 @@ def load_annotations_csv(fp):
                 xmin=float(row['xmin']) if present else None,
                 xmax=float(row['xmax']) if present else None,
                 ymin=float(row['ymin']) if present else None,
-                ymax=float(row['ymax']) if present else None,
-            )
-            frames.append((t, annot))
+                ymax=float(row['ymax']) if present else None)
+            frames[t] = annot
         assert len(frames) >= 2
         first_row = rows_by_track[vid_obj][0]
-        tracks.setdefault(vid_id, {})[obj_id] = data.make_track_label(
+        tracks[vid_obj] = data.make_track_label(
             category=first_row['class_name'],
             frames=frames,
             contains_cuts=first_row['contains_cuts'],
-            always_visible=first_row['always_visible'],
-        )
+            always_visible=first_row['always_visible'])
 
     return tracks
 
 
 def dump_annotations_csv(tracks, fp):
     writer = csv.DictWriter(fp, fieldnames=TRACK_FIELDS)
-    for vid in sorted(tracks.keys()):
+    for vid in sorted(tracks.videos()):
         # Sort objects by their first frame.
-        for obj, track in sorted(tracks[vid].items(), key=_obj_sort_key):
+        sort_key = lambda obj: (_start_time(tracks[vid][obj]), obj)
+        for obj in sorted(tracks.objects(vid), key=sort_key):
             for frame_num, frame in track['frames']:
                 assert frame_num == int(frame_num)
                 frame_num = int(frame_num)
                 assert frame_num % 30 == 0
-                # timestamp = frame_num // 30
+                # timestamp_sec = frame_num // 30
                 class_name = track.get('category', '')
                 class_id = CLASS_ID_LOOKUP[class_name] if class_name else ''
                 row = {
@@ -83,14 +82,11 @@ def dump_annotations_csv(tracks, fp):
                 writer.writerow(row)
 
 
-def _obj_sort_key(obj_track):
-    obj, track = obj_track
-    return (_first_frame(track), obj)
-
-def _first_frame(track):
-    assert len(track['frames']) > 0
-    t, _ = track['frames'][0]
-    return t
+def _start_time(track):
+    frames = track['frames']
+    if not isinstance(frames, util.TimeSeries):
+        raise TypeError('type is not TimeSeries: {}'.format(type(frames)))
+    return frames.keys()[0]
 
 
 def _parse_is_present(s):

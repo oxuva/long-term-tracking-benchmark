@@ -42,19 +42,17 @@ def load_predictions_csv(fp):
     # fp.seek(0)
     reader = _dict_reader_optional_fieldnames(fp, PREDICTION_FIELD_NAMES)
 
-    preds = []
+    preds = util.TimeSeries()
     for row in reader:
         present = util.str2bool(row['present'])
-        frame = make_prediction(
+        t = int(row['frame_num'])
+        preds[t] = make_prediction(
             present=present,
             score=float(row['score']),
             xmin=float(row['xmin']) if present else None,
             xmax=float(row['xmax']) if present else None,
             ymin=float(row['ymin']) if present else None,
-            ymax=float(row['ymax']) if present else None,
-        )
-        t = int(row['frame_num'])
-        preds.append((t, frame))
+            ymax=float(row['ymax']) if present else None)
     return preds
 
 
@@ -81,11 +79,11 @@ def dump_predictions_csv(vid_id, obj_id, predictions, fp):
     Args:
         vid_id: String.
         obj_id: String.
-        predictions: List of (time, prediction-dict) pairs.
+        predictions: TimeSeries of prediction dicts.
         fp: File-like object with write().
     '''
     writer = csv.DictWriter(fp, fieldnames=PREDICTION_FIELD_NAMES)
-    for t, pred in predictions:
+    for t, pred in predictions.items():
         row = {
             'video':     vid_id,
             'object':    obj_id,

@@ -82,25 +82,25 @@ def main():
 
     tracks_file = os.path.join('annotations', args.data+'.csv')
     annotations = _load_annotations(tracks_file)
-    tracker_names = _get_tracker_names()
+    tracker_names = _load_tracker_names()
 
     # Assign colors and markers alphabetically to achieve invariance across plots.
-    trackers = sorted(tracker_names.keys())
-    tracker_colors = {t: color
-        for t, color in zip(trackers, _generate_colors(len(trackers), v=0.9))}
-    tracker_markers = {t: marker
-        for t, marker in zip(trackers, cycle(MARKERS))}
+    trackers = sorted(tracker_names.keys(), key=lambda s: s.lower())
+    tracker_colors = {tracker: color
+        for tracker, color in zip(trackers, _generate_colors(len(trackers), v=0.9))}
+    tracker_markers = {tracker: marker
+        for tracker, marker in zip(trackers, cycle(MARKERS))}
 
-    # Nested dict with elements assessment[tracker][iou][(vid, obj)]
+    # Each element assessment[tracker][iou] is a VideoObjectDict
+    # of TimeSeries of frame assessments.
+    # TODO: Is it unsafe to use float (iou) as dictionary key?
     assessment = {}
     pred_dir = os.path.join('predictions', args.data)
     for tracker_ind, tracker in enumerate(trackers):
         for iou_ind, iou in enumerate(args.iou_thresholds):
-            log_context = 'iou {}/{} {}: tracker {}/{} {}'.format(
-                iou_ind+1, len(args.iou_thresholds), iou,
-                tracker_ind+1, len(trackers), tracker)
-            if args.verbose:
-                print('{}: load and assess predictions'.format(log_context), file=sys.stderr)
+            log_context = 'tracker {}/{} {}: iou {}/{} {}'.format(
+                tracker_ind+1, len(trackers), tracker,
+                iou_ind+1, len(args.iou_thresholds), iou)
             cache_file = os.path.join(
                 args.data, 'assessment', '{}_{}.pickle'.format(tracker, iou))
             assessment.setdefault(tracker, {})[iou] = util.cache_pickle(
@@ -109,16 +109,13 @@ def main():
                     annotations, iou,
                     tracker_pred_dir=os.path.join(pred_dir, tracker),
                     log_prefix=log_context + ': '),
-                ignore_existing=args.ignore_cache)
+                ignore_existing=args.ignore_cache,
+                verbose=args.verbose)
 
-    # Nested dict with elements quality[tracker][iou][(vid, obj)]
-    quality = {
-        tracker: {
-            iou: {
-                vid_obj: assess.summarize_sequence(track_assessment)
-                for vid_obj, track_assessment in assessment[tracker][iou].items()}
-            for iou_ind, iou in enumerate(args.iou_thresholds)}
-        for tracker_ind, tracker in enumerate(trackers)}
+    # Each element quality[tracker][iou] is a VideoObjectDict of sequence summary dicts.
+    quality = {tracker: {iou:
+        util.VideoObjectDict(_map_dict(assess.summarize_sequence, assessment[tracker][iou]))
+        for iou in args.iou_thresholds} for tracker in trackers}
 
     if args.subcommand == 'table':
         _print_statistics(quality, tracker_names)
@@ -133,7 +130,7 @@ def main():
                 tracker_names, tracker_colors, tracker_markers)
 
 
-def _get_tracker_names():
+def _load_tracker_names():
     if args.challenge == 'all':
         challenges = ['constrained', 'open']
     else:
@@ -149,63 +146,39 @@ def _get_tracker_names():
 
 def _load_annotations(fname):
     with open(fname, 'r') as fp:
-        if fname.endswith('.json'):
-            tracks = json.load(fp)
-        elif fname.endswith('.csv'):
+        # if fname.endswith('.json'):
+        #     tracks = json.load(fp)
+        if fname.endswith('.csv'):
             tracks = io.load_annotations_csv(fp)
         else:
             raise ValueError('unknown extension: {}'.format(fname))
     return tracks
 
 
-def _print_statistics(quality, names=None):
-    names = names or {}
-    table_dir = os.path.join('analysis', args.data, args.challenge)
-    _ensure_dir_exists(table_dir)
-    table_file = os.path.join(table_dir, 'table.txt')
-    if args.verbose:
-        print('write table to {}'.format(table_file), file=sys.stderr)
-    with open(table_file, 'w') as f:
-        fieldnames = (['tracker', 'tnr'] +
-                      ['tpr_{}'.format(iou) for iou in args.iou_thresholds])
-        print(','.join(fieldnames), file=f)
-        for tracker in sorted(quality.keys()):
-            tprs = []
-            stats = {
-                iou: assess.statistics(quality[tracker][iou].values())
-                for iou in args.iou_thresholds}
-            first_iou = args.iou_thresholds[0]
-            row = ([names.get(tracker, tracker),
-                       '{:.6g}'.format(stats[first_iou]['TNR'])] +
-                   ['{:.6g}'.format(stats[iou]['TPR']) for iou in args.iou_thresholds])
-            print(','.join(row), file=f)
-
-
 def _load_predictions_and_assess(annotations, iou_threshold, tracker_pred_dir, log_prefix=''):
     '''Loads all predictions of a tracker.
 
     Args:
+        annotations -- VideoObjectDict of track annotations.
         tracker_pred_dir -- Directory that contains files video_object.csv
 
     Returns:
-        Dictionary that maps iou threshold to
-        dictionary that maps (vid, object_name) to track quality.
+        VideoObjectDict of TimeSeries of frame assessments.
     '''
-    assessment = {}
-    track_ids = [(vid, obj) for vid in annotations for obj in annotations[vid]]
-    for track_num, vid_obj in enumerate(track_ids):
+    assessment = util.VideoObjectDict()
+    for track_num, vid_obj in enumerate(annotations):
         vid, obj = vid_obj
-        annot = annotations[vid][obj]
+        annot = annotations[vid_obj]
         track_name = vid + '_' + obj
         log_context = '{}object {}/{} {}'.format(
-            log_prefix, track_num+1, len(track_ids), track_name)
+            log_prefix, track_num+1, len(annotations), track_name)
         if args.verbose:
             print(log_context, file=sys.stderr)
         pred_file = os.path.join(tracker_pred_dir, '{}.csv'.format(track_name))
         try:
             with open(pred_file, 'r') as fp:
                 pred = io.load_predictions_csv(fp)
-            assessment[vid_obj] = assess.assess_predictions(
+            assessment[vid_obj] = assess.assess_sequence(
                 annot['frames'], pred, iou_threshold=iou_threshold,
                 log_prefix='{}: '.format(log_context))
         except IOError, exc:
@@ -245,9 +218,8 @@ def _plot_statistics(quality, trackers, iou_threshold,
     colors = colors or {}
     markers = markers or {}
 
-    stats = {
-        tracker: assess.statistics(quality[tracker][iou_threshold].values())
-        for tracker in trackers}
+    stats = {tracker: assess.statistics(quality[tracker][iou_threshold].values())
+             for tracker in trackers}
     sort_key = lambda s: (s['GM'], s['TPR'], s['TNR'])
     trackers = sorted(trackers, key=lambda t: sort_key(stats[t]), reverse=True)
 
@@ -266,13 +238,12 @@ def _plot_statistics(quality, trackers, iou_threshold,
     plt.xlim(xmin=0, xmax=1)
     plt.ylim(ymin=0, ymax=_ceil_multiple(CLEARANCE*max_tpr, 0.1))
     plt.grid(color=GRID_COLOR)
-    plt.legend(loc='upper right')
     plot_dir = os.path.join('analysis', args.data, args.challenge)
-    plot_file = os.path.join(plot_dir, 'stats_iou_{}.pdf'.format(iou_threshold))
     _ensure_dir_exists(plot_dir)
-    if args.verbose:
-        print('write plot to {}'.format(plot_file), file=sys.stderr)
-    plt.savefig(plot_file)
+    base_name = 'stats_iou_{}'.format(iou_threshold)
+    _save_fig(os.path.join(plot_dir, base_name+'_no_legend.pdf'))
+    plt.legend(loc='upper right')
+    _save_fig(os.path.join(plot_dir, base_name+'.pdf'))
 
 
 def _plot_intervals(annotations, assessment, trackers, iou_threshold,
@@ -296,21 +267,16 @@ def _plot_intervals(annotations, assessment, trackers, iou_threshold,
     points = {}
     for mode in INTERVAL_TYPES:
         intervals[mode], points[mode] = _make_intervals(times_sec, mode)
-    stats = {
-        mode: {
-            tracker: _interval_stats(
-                annotations, assessment[tracker][iou_threshold], intervals[mode])
-            for tracker in trackers}
-        for mode in INTERVAL_TYPES}
-    tpr = {
-        mode: {
-            tracker: [s.get('TPR', None) for s in stats[mode][tracker]]
-            for tracker in trackers}
-        for mode in INTERVAL_TYPES}
+    stats = {mode: {tracker:
+        _interval_stats(annotations, assessment[tracker][iou_threshold], intervals[mode])
+        for tracker in trackers} for mode in INTERVAL_TYPES}
+    tpr = {mode: {tracker:
+        [s.get('TPR', None) for s in stats[mode][tracker]]
+        for tracker in trackers} for mode in INTERVAL_TYPES}
 
     # Find maximum TPR value over all plots (to have same axes).
-    max_tpr = {
-        mode: max(val for tracker in trackers for val in tpr[mode][tracker] if val is not None)
+    max_tpr = {mode:
+        max(val for tracker in trackers for val in tpr[mode][tracker] if val is not None)
         for mode in INTERVAL_TYPES}
 
     for mode in INTERVAL_TYPES:
@@ -327,31 +293,29 @@ def _plot_intervals(annotations, assessment, trackers, iou_threshold,
         ymax = max(max_tpr.values()) if args.same_axes else max_tpr[mode]
         plt.ylim(ymin=0, ymax=_ceil_multiple(CLEARANCE*ymax, 0.1))
         plt.grid(color=GRID_COLOR)
-        plt.legend()
         plot_dir = os.path.join('analysis', args.data, args.challenge)
-        plot_file = os.path.join(
-            plot_dir, 'interval_{}_iou_{}.pdf'.format(mode, iou_threshold))
         _ensure_dir_exists(plot_dir)
-        if args.verbose:
-            print('write plot to {}'.format(plot_file), file=sys.stderr)
-        plt.savefig(plot_file)
+        base_name = 'interval_{}_iou_{}'.format(mode, iou_threshold)
+        _save_fig(os.path.join(plot_dir, base_name+'_no_legend.pdf'))
+        plt.legend()
+        _save_fig(os.path.join(plot_dir, base_name+'.pdf'))
 
 
 def _make_intervals(values, interval_type):
     '''Produces intervals and points at which to plot them.
-    
+
     Returns:
         intervals, points
 
     Example:
-        >> _make_intervals([1, 2, 3], 'before')
+        >> _make_intervals([0, 1, 2, 3], 'before')
         [(0, 1), (0, 2), (0, 3)], [1, 2, 3]
 
-        >> _make_intervals([1, 2, 3], 'after')
-        [(1, inf), (2, inf), (3, inf)], [1, 2, 3]
+        >> _make_intervals([0, 1, 2, 3], 'after')
+        [(0, inf), (1, inf), (2, inf), (3, inf)], [1, 2, 3]
 
-        >> _make_intervals([1, 2, 3], 'between')
-        [(1, 2), (2, 3)], [1.5, 2.5]
+        >> _make_intervals([0, 1, 2, 3], 'between')
+        [(0, 1), (1, 2), (2, 3)], [0.5, 1.5, 2.5]
     '''
     if interval_type == 'before':
         intervals = [(0, x) for x in values if x > 0]
@@ -369,22 +333,19 @@ def _interval_stats(annotations, assessment, intervals):
     '''Computes the quality statistics for each interval.
 
     Args:
-        annotations -- Nested dictionary.
-            Each element annotations[vid][obj] is an annotation dict.
+        annotations -- VideoObjectDict of TimeSeries of frame annotation dicts.
             This is required to get the initial frame number of each track.
-        assessment -- Dictionary that maps (video, object) to list of predictions.
+        assessment -- VideoObjectDict of TimeSeries of frame assessment dicts.
         intervals -- List of tuples [(a, b), ...]
 
     Returns:
         List that contains statistics for each interval.
     '''
     stats = [None for _ in intervals]
-    track_ids = [(vid, obj) for vid in annotations for obj in annotations[vid]]
     for interval_index, (a_sec, b_sec) in enumerate(intervals):
-        quality = {}
-        for vid_obj in track_ids:
-            vid, obj = vid_obj
-            t0 = _start_time(annotations[vid][obj]) # in number of frames
+        quality = util.VideoObjectDict()
+        for vid_obj in annotations:
+            t0 = _start_time(annotations[vid_obj]) # in number of frames
             subseq = _select_interval(
                 assessment[vid_obj],
                 t0 + FRAME_RATE * a_sec,
@@ -393,21 +354,30 @@ def _interval_stats(annotations, assessment, intervals):
         stats[interval_index] = assess.statistics(quality.values())
     return stats
 
-
-def _map_dict(f, x):
-    return {k: f(v) for k, v in x.iteritems()}
-
 def _select_interval(frames, a, b):
     return {t: x for t, x in frames.items() if a <= t <= b}
 
-def _start_time(track):
-    t, _ = track['frames'][0]
-    return t
+def _start_time(annotation):
+    frames = annotation['frames']
+    if not isinstance(frames, util.TimeSeries):
+        raise TypeError('type is not TimeSeries: {}'.format(type(frames)))
+    return frames.keys()[0]
 
+
+def _map_dict(f, x):
+    return {k: f(v) for k, v in x.items()}
+
+def _ensure_dir_exists(dir):
+    if not os.path.exists(dir):
+        os.makedirs(dir)
 
 def _generate_colors(n, s=1.0, v=1.0):
     return [colorsys.hsv_to_rgb(i/n, s, v) for i in range(n)]
 
+def _save_fig(plot_file):
+    if args.verbose:
+        print('write plot to {}'.format(plot_file), file=sys.stderr)
+    plt.savefig(plot_file)
 
 def _plot_level_sets(n=10, num_points=100):
     x = np.linspace(0, 1, num_points+1)[1:]
@@ -415,11 +385,6 @@ def _plot_level_sets(n=10, num_points=100):
         # gm = sqrt(x*y); y = gm^2 / x
         y = gm**2 / x
         plt.plot(x, y, color=GRID_COLOR, linewidth=1, linestyle='dashed')
-
-
-def _ensure_dir_exists(dir):
-    if not os.path.exists(dir):
-        os.makedirs(dir)
 
 def _ceil_multiple(x, step):
     return math.ceil(x / step) * step
