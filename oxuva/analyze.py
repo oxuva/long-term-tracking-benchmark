@@ -22,11 +22,11 @@ from itertools import cycle
 
 FRAME_RATE = 30
 
-MARKERS = ['o', 'v', '^', '<', '>', 's', 'd'] # '*'
-GRID_COLOR = plt.rcParams['grid.color'] # '#cccccc'
-CLEARANCE = 1.2 # Axis range is CLEARANCE * max_value, rounded up.
+MARKERS = ['o', 'v', '^', '<', '>', 's', 'd']  # '*'
+GRID_COLOR = plt.rcParams['grid.color']  # '#cccccc'
+CLEARANCE = 1.2  # Axis range is CLEARANCE * max_value, rounded up.
 
-ARGS_FORMATTER = argparse.ArgumentDefaultsHelpFormatter # Show default values
+ARGS_FORMATTER = argparse.ArgumentDefaultsHelpFormatter  # Show default values
 
 INTERVAL_TYPES = ['before', 'after', 'between']
 INTERVAL_AXIS_LABEL = {
@@ -80,16 +80,16 @@ def main():
     global args
     args = parser.parse_args()
 
-    tracks_file = os.path.join('annotations', args.data+'.csv')
+    tracks_file = os.path.join('annotations', args.data + '.csv')
     annotations = _load_annotations(tracks_file)
     tracker_names = _load_tracker_names()
 
     # Assign colors and markers alphabetically to achieve invariance across plots.
     trackers = sorted(tracker_names.keys(), key=lambda s: s.lower())
     tracker_colors = {tracker: color
-        for tracker, color in zip(trackers, _generate_colors(len(trackers), v=0.9))}
+                      for tracker, color in zip(trackers, _generate_colors(len(trackers), v=0.9))}
     tracker_markers = {tracker: marker
-        for tracker, marker in zip(trackers, cycle(MARKERS))}
+                       for tracker, marker in zip(trackers, cycle(MARKERS))}
 
     # Each element assessment[tracker][iou] is a VideoObjectDict
     # of TimeSeries of frame assessments.
@@ -99,8 +99,8 @@ def main():
     for tracker_ind, tracker in enumerate(trackers):
         for iou_ind, iou in enumerate(args.iou_thresholds):
             log_context = 'tracker {}/{} {}: iou {}/{} {}'.format(
-                tracker_ind+1, len(trackers), tracker,
-                iou_ind+1, len(args.iou_thresholds), iou)
+                tracker_ind + 1, len(trackers), tracker,
+                iou_ind + 1, len(args.iou_thresholds), iou)
             cache_file = os.path.join(
                 args.data, 'assessment', '{}_{}.pickle'.format(tracker, iou))
             assessment.setdefault(tracker, {})[iou] = util.cache_pickle(
@@ -114,8 +114,8 @@ def main():
 
     # Each element quality[tracker][iou] is a VideoObjectDict of sequence summary dicts.
     quality = {tracker: {iou:
-        util.VideoObjectDict(_map_dict(assess.summarize_sequence, assessment[tracker][iou]))
-        for iou in args.iou_thresholds} for tracker in trackers}
+                         util.VideoObjectDict(_map_dict(assess.summarize_sequence, assessment[tracker][iou]))
+                         for iou in args.iou_thresholds} for tracker in trackers}
 
     if args.subcommand == 'table':
         _print_statistics(quality, tracker_names)
@@ -171,7 +171,7 @@ def _load_predictions_and_assess(annotations, iou_threshold, tracker_pred_dir, l
         annot = annotations[vid_obj]
         track_name = vid + '_' + obj
         log_context = '{}object {}/{} {}'.format(
-            log_prefix, track_num+1, len(annotations), track_name)
+            log_prefix, track_num + 1, len(annotations), track_name)
         if args.verbose:
             print(log_context, file=sys.stderr)
         pred_file = os.path.join(tracker_pred_dir, '{}.csv'.format(track_name))
@@ -207,7 +207,7 @@ def _print_statistics(quality, names=None):
                 for iou in args.iou_thresholds}
             first_iou = args.iou_thresholds[0]
             row = ([names.get(tracker, tracker),
-                       '{:.6g}'.format(stats[first_iou]['TNR'])] +
+                    '{:.6g}'.format(stats[first_iou]['TNR'])] +
                    ['{:.6g}'.format(stats[iou]['TPR']) for iou in args.iou_thresholds])
             print(','.join(row), file=f)
 
@@ -220,8 +220,7 @@ def _plot_statistics(quality, trackers, iou_threshold,
 
     stats = {tracker: assess.statistics(quality[tracker][iou_threshold].values())
              for tracker in trackers}
-    sort_key = lambda s: (s['GM'], s['TPR'], s['TNR'])
-    trackers = sorted(trackers, key=lambda t: sort_key(stats[t]), reverse=True)
+    trackers = sorted(trackers, key=lambda t: _stats_sort_key(stats[t]), reverse=True)
 
     plt.figure(figsize=(args.width_inches, args.height_inches))
     plt.xlabel('True Negative Rate (Absent)')
@@ -236,14 +235,14 @@ def _plot_statistics(quality, trackers, iou_threshold,
                  markerfacecolor='none', markeredgewidth=2, clip_on=False)
     max_tpr = max([stats[tracker]['TPR'] for tracker in trackers])
     plt.xlim(xmin=0, xmax=1)
-    plt.ylim(ymin=0, ymax=_ceil_multiple(CLEARANCE*max_tpr, 0.1))
+    plt.ylim(ymin=0, ymax=_ceil_multiple(CLEARANCE * max_tpr, 0.1))
     plt.grid(color=GRID_COLOR)
     plot_dir = os.path.join('analysis', args.data, args.challenge)
     _ensure_dir_exists(plot_dir)
     base_name = 'stats_iou_{}'.format(iou_threshold)
-    _save_fig(os.path.join(plot_dir, base_name+'_no_legend.pdf'))
+    _save_fig(os.path.join(plot_dir, base_name + '_no_legend.pdf'))
     plt.legend(loc='upper right')
-    _save_fig(os.path.join(plot_dir, base_name+'.pdf'))
+    _save_fig(os.path.join(plot_dir, base_name + '.pdf'))
 
 
 def _plot_intervals(annotations, assessment, trackers, iou_threshold,
@@ -251,7 +250,7 @@ def _plot_intervals(annotations, assessment, trackers, iou_threshold,
     names = names or {}
     colors = colors or {}
     markers = markers or {}
-    times_sec = range(0, args.max_time+1, args.time_step)
+    times_sec = range(0, args.max_time + 1, args.time_step)
 
     # Get overall stats for order in legend.
     quality = {
@@ -260,45 +259,44 @@ def _plot_intervals(annotations, assessment, trackers, iou_threshold,
     stats = {
         tracker: assess.statistics(quality[tracker].values())
         for tracker in trackers}
-    sort_key = lambda s: (s['GM'], s['TPR'], s['TNR'])
-    trackers = sorted(trackers, key=lambda t: sort_key(stats[t]), reverse=True)
+    trackers = sorted(trackers, key=lambda t: _stats_sort_key(stats[t]), reverse=True)
 
     intervals = {}
     points = {}
     for mode in INTERVAL_TYPES:
         intervals[mode], points[mode] = _make_intervals(times_sec, mode)
     stats = {mode: {tracker:
-        _interval_stats(annotations, assessment[tracker][iou_threshold], intervals[mode])
-        for tracker in trackers} for mode in INTERVAL_TYPES}
+                    _interval_stats(annotations, assessment[tracker][iou_threshold], intervals[mode])
+                    for tracker in trackers} for mode in INTERVAL_TYPES}
     tpr = {mode: {tracker:
-        [s.get('TPR', None) for s in stats[mode][tracker]]
-        for tracker in trackers} for mode in INTERVAL_TYPES}
+                  [s.get('TPR', None) for s in stats[mode][tracker]]
+                  for tracker in trackers} for mode in INTERVAL_TYPES}
 
     # Find maximum TPR value over all plots (to have same axes).
     max_tpr = {mode:
-        max(val for tracker in trackers for val in tpr[mode][tracker] if val is not None)
-        for mode in INTERVAL_TYPES}
+               max(val for tracker in trackers for val in tpr[mode][tracker] if val is not None)
+               for mode in INTERVAL_TYPES}
 
     for mode in INTERVAL_TYPES:
         plt.figure(figsize=(args.width_inches, args.height_inches))
         plt.xlabel(INTERVAL_AXIS_LABEL[mode])
         plt.ylabel('True Positive Rate')
         for tracker in trackers:
-            plt.plot(1/60.0*np.asfarray(points[mode]), tpr[mode][tracker],
+            plt.plot(1 / 60.0 * np.asfarray(points[mode]), tpr[mode][tracker],
                      label=names.get(tracker, tracker),
                      marker=markers.get(tracker, None),
                      color=colors.get(tracker, None),
                      markerfacecolor='none', markeredgewidth=2, clip_on=False)
-        plt.xlim(xmin=0, xmax=args.max_time/60.0)
+        plt.xlim(xmin=0, xmax=args.max_time / 60.0)
         ymax = max(max_tpr.values()) if args.same_axes else max_tpr[mode]
-        plt.ylim(ymin=0, ymax=_ceil_multiple(CLEARANCE*ymax, 0.1))
+        plt.ylim(ymin=0, ymax=_ceil_multiple(CLEARANCE * ymax, 0.1))
         plt.grid(color=GRID_COLOR)
         plot_dir = os.path.join('analysis', args.data, args.challenge)
         _ensure_dir_exists(plot_dir)
         base_name = 'interval_{}_iou_{}'.format(mode, iou_threshold)
-        _save_fig(os.path.join(plot_dir, base_name+'_no_legend.pdf'))
+        _save_fig(os.path.join(plot_dir, base_name + '_no_legend.pdf'))
         plt.legend()
-        _save_fig(os.path.join(plot_dir, base_name+'.pdf'))
+        _save_fig(os.path.join(plot_dir, base_name + '.pdf'))
 
 
 def _make_intervals(values, interval_type):
@@ -325,7 +323,7 @@ def _make_intervals(values, interval_type):
         points = list(values)
     elif interval_type == 'between':
         intervals = zip(values, values[1:])
-        points = [0.5*(a+b) for a, b in intervals]
+        points = [0.5 * (a + b) for a, b in intervals]
     return intervals, points
 
 
@@ -345,7 +343,7 @@ def _interval_stats(annotations, assessment, intervals):
     for interval_index, (a_sec, b_sec) in enumerate(intervals):
         quality = util.VideoObjectDict()
         for vid_obj in annotations:
-            t0 = _start_time(annotations[vid_obj]) # in number of frames
+            t0 = _start_time(annotations[vid_obj])  # in number of frames
             subseq = _select_interval(
                 assessment[vid_obj],
                 t0 + FRAME_RATE * a_sec,
@@ -354,8 +352,10 @@ def _interval_stats(annotations, assessment, intervals):
         stats[interval_index] = assess.statistics(quality.values())
     return stats
 
+
 def _select_interval(frames, a, b):
     return {t: x for t, x in frames.items() if a <= t <= b}
+
 
 def _start_time(annotation):
     frames = annotation['frames']
@@ -367,27 +367,36 @@ def _start_time(annotation):
 def _map_dict(f, x):
     return {k: f(v) for k, v in x.items()}
 
+
 def _ensure_dir_exists(dir):
     if not os.path.exists(dir):
         os.makedirs(dir)
 
+
 def _generate_colors(n, s=1.0, v=1.0):
-    return [colorsys.hsv_to_rgb(i/n, s, v) for i in range(n)]
+    return [colorsys.hsv_to_rgb(i / n, s, v) for i in range(n)]
+
 
 def _save_fig(plot_file):
     if args.verbose:
         print('write plot to {}'.format(plot_file), file=sys.stderr)
     plt.savefig(plot_file)
 
+
 def _plot_level_sets(n=10, num_points=100):
-    x = np.linspace(0, 1, num_points+1)[1:]
+    x = np.linspace(0, 1, num_points + 1)[1:]
     for gm in np.asfarray(range(1, n)) / n:
         # gm = sqrt(x*y); y = gm^2 / x
         y = gm**2 / x
         plt.plot(x, y, color=GRID_COLOR, linewidth=1, linestyle='dashed')
 
+
 def _ceil_multiple(x, step):
     return math.ceil(x / step) * step
+
+
+def _stats_sort_key(stats):
+    return (stats['GM'], stats['TPR'], stats['TNR'])
 
 
 if __name__ == '__main__':

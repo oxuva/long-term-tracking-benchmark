@@ -18,23 +18,28 @@ def str2bool(x):
         return False
     raise ValueError('warning: unclear value: {}'.format(x))
 
+
 def str2bool_or_none(x):
     try:
         return str2bool(x)
     except ValueError:
         return None
 
+
 def bool2str(x):
     return str(x).lower()
 
+
 def default_if_none(x, value):
     return value if x is None else x
+
 
 def harmonic_mean(*args):
     assert all([x >= 0 for x in args])
     if any([x == 0 for x in args]):
         return 0.
     return np.asscalar(1. / np.mean(1. / np.asfarray(args)))
+
 
 def geometric_mean(*args):
     assert all([x >= 0 for x in args])
@@ -69,6 +74,7 @@ def cache(protocol, filename, func, makedir=True, ignore_existing=False, verbose
             protocol.dump(result, w)
         os.rename(tmp, filename)
     return result
+
 
 cache_json = functools.partial(cache, json)
 cache_pickle = functools.partial(cache, pickle)

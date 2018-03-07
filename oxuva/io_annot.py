@@ -66,13 +66,13 @@ def dump_annotations_csv(tracks, fp):
                 class_name = track.get('category', '')
                 class_id = CLASS_ID_LOOKUP[class_name] if class_name else ''
                 row = {
-                    'video_id':   vid,
-                    'object_id':  obj,
-                    'class_id':   class_id,
+                    'video_id': vid,
+                    'object_id': obj,
+                    'class_id': class_id,
                     'class_name': class_name,
                     'contains_cuts': _str_contains_cuts(track.get('contains_cuts', None)),
                     'always_visible': _str_always_visible(track.get('always_visible', None)),
-                    'frame_num':  frame_num,
+                    'frame_num': frame_num,
                     'object_presence': 'present' if frame['present'] else 'absent',
                     'xmin': frame['xmin'],
                     'xmax': frame['xmax'],
@@ -97,30 +97,35 @@ def _parse_is_present(s):
     else:
         raise ValueError('unknown value for presence: {}'.format(s))
 
+
 def _str_is_present(present):
     if present:
         return 'present'
     else:
         return 'absent'
 
+
 def _str_contains_cuts(contains_cuts):
-    if contains_cuts == True:
+    if contains_cuts is True:
         return 'true'
-    elif contains_cuts == False:
+    elif contains_cuts is False:
         return 'false'
     else:
         return 'unknown'
+
 
 def _parse_contains_cuts(s):
     return util.str2bool_or_none(s)
 
+
 def _str_always_visible(always_visible):
-    if always_visible == True:
+    if always_visible is True:
         return 'true'
-    elif always_visible == False:
+    elif always_visible is False:
         return 'false'
     else:
         return 'unknown'
+
 
 def _parse_always_visible(s):
     return util.str2bool_or_none(s)

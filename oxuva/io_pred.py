@@ -21,11 +21,11 @@ def make_prediction(present=None, score=None, xmin=None, ymin=None, xmax=None, y
     '''Describes the output of a tracker in one frame.'''
     return {
         'present': util.default_if_none(present, True),
-        'score':   util.default_if_none(score, 0.0),
-        'xmin':    util.default_if_none(xmin, 0.0),
-        'xmax':    util.default_if_none(xmax, 0.0),
-        'ymin':    util.default_if_none(ymin, 0.0),
-        'ymax':    util.default_if_none(ymax, 0.0),
+        'score': util.default_if_none(score, 0.0),
+        'xmin': util.default_if_none(xmin, 0.0),
+        'xmax': util.default_if_none(xmax, 0.0),
+        'ymin': util.default_if_none(ymin, 0.0),
+        'ymax': util.default_if_none(ymax, 0.0),
     }
 
 
@@ -85,14 +85,14 @@ def dump_predictions_csv(vid_id, obj_id, predictions, fp):
     writer = csv.DictWriter(fp, fieldnames=PREDICTION_FIELD_NAMES)
     for t, pred in predictions.items():
         row = {
-            'video':     vid_id,
-            'object':    obj_id,
+            'video': vid_id,
+            'object': obj_id,
             'frame_num': t,
-            'present':   util.bool2str(pred['present']),
-            'score':     pred['score'],
-            'xmin':      pred['xmin'],
-            'xmax':      pred['xmax'],
-            'ymin':      pred['ymin'],
-            'ymax':      pred['ymax'],
+            'present': util.bool2str(pred['present']),
+            'score': pred['score'],
+            'xmin': pred['xmin'],
+            'xmax': pred['xmax'],
+            'ymin': pred['ymin'],
+            'ymax': pred['ymax'],
         }
         writer.writerow(row)

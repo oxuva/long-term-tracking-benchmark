@@ -48,7 +48,7 @@ def statistics(tracks_quality):
     Args:
         tracks_quality -- List of quality for each track.
     '''
-    tracks_quality = list(tracks_quality) # In case tracks_quality is a generator.
+    tracks_quality = list(tracks_quality)  # In case tracks_quality is a generator.
     total = {
         k: sum([q[k] for q in tracks_quality])
         for k in ['TP', 'FN', 'FP', 'TN']
@@ -178,12 +178,14 @@ def iou(a, b):
     u = vol(a) + vol(b) - i
     return float(i) / float(u)
 
+
 def vol(r):
     # Any inverted rectangle is silently considered empty.
     # (Allows for empty intersection.)
     xsize = max(0, r['xmax'] - r['xmin'])
     ysize = max(0, r['ymax'] - r['ymin'])
     return xsize * ysize
+
 
 def intersect(a, b):
     return {
