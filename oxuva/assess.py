@@ -86,7 +86,7 @@ def subset_using_previous_if_missing(series, times):
     Raises an exception if asked for a time before the first element in series.
     '''
     assert isinstance(series, util.TimeSeries)
-    series = series.items()
+    series = list(series.items())
     subset = [None for _ in times]
     t_curr, x_curr = None, None
     for i, t in enumerate(times):
