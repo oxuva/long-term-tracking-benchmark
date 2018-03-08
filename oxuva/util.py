@@ -130,24 +130,6 @@ class SparseTimeSeries(object):
         return t in self._frames
 
 
-# class Track(object):
-#     '''
-#     '''
-#
-#     def __init__(self, frames=None, attributes=None):
-#         self.init_time = init_time
-#         self.init_rect = init_rect
-#         self.labels = labels
-#         if last_time is None and labels is not None:
-#             self.last_time = labels.sorted_keys()[-1]
-#         else:
-#             self.last_time = last_time
-#         self.attributes = attributes or {}
-#
-#     def len(self):
-#         return self.last_time - self.init_time + 1
-
-
 class Task(object):
     '''Describes a tracking task with optional ground-truth annotations.'''
 
