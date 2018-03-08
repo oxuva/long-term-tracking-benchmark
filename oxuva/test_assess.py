@@ -17,14 +17,14 @@ class TestSubsetUsingPrevious(unittest.TestCase):
         times = [1, 2, 3]
         got = assess.subset_using_previous_if_missing(source, times)
         want = [(1, 'one'), (2, 'one'), (3, 'three')]
-        self.assertEqual(got.sorted_items(), want)
+        self.assertEqual(list(got.sorted_items()), want)
 
     def test_beyond_end(self):
         source = util.SparseTimeSeries({1: 'one', 3: 'three'})
         times = [2, 4, 6]
         got = assess.subset_using_previous_if_missing(source, times)
         want = [(2, 'one'), (4, 'three'), (6, 'three')]
-        self.assertEqual(got.sorted_items(), want)
+        self.assertEqual(list(got.sorted_items()), want)
 
     def test_before_start(self):
         source = util.SparseTimeSeries({3: 'three'})
