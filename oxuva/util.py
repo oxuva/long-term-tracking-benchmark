@@ -80,7 +80,7 @@ cache_json = functools.partial(cache, json)
 cache_pickle = functools.partial(cache, pickle)
 
 
-class TimeSeries(object):
+class SparseTimeSeries(object):
     '''Dictionary with keys in sorted order.'''
 
     def __init__(self, frames=None):
@@ -104,31 +104,96 @@ class TimeSeries(object):
     def setdefault(self, t, default):
         return self._frames.setdefault(t, default)
 
-    def keys(self):
+    # def keys(self):
+    #     return self._frames.keys()
+
+    def sorted_keys(self):
         '''Returns times in sequential order.'''
         return sorted(self._frames.keys())
 
     def values(self):
         return self._frames.values()
 
-    def items(self):
+    def sorted_items(self):
         '''Returns (time, value) pairs in sequential order.'''
         times = sorted(self._frames.keys())
         return zip(times, [self._frames[t] for t in times])
+
+    # def items(self):
+    #     return self._frames.items()
 
     def __iter__(self):
         for t in sorted(self._frames.keys()):
             yield t
 
+    def __contains__(self, t):
+        return t in self._frames
+
 
 # class Track(object):
+#     '''
+#     '''
 #
-#     def __init__(self, init_time, init_rect, final_time=None, annotations=None):
+#     def __init__(self, frames=None, attributes=None):
 #         self.init_time = init_time
 #         self.init_rect = init_rect
-#         self.final_time = None
-#         self.annotations = None
-#         self.attributes = None
+#         self.labels = labels
+#         if last_time is None and labels is not None:
+#             self.last_time = labels.sorted_keys()[-1]
+#         else:
+#             self.last_time = last_time
+#         self.attributes = attributes or {}
+#
+#     def len(self):
+#         return self.last_time - self.init_time + 1
+
+
+class Task(object):
+    '''Describes a tracking task with optional ground-truth annotations.'''
+
+    def __init__(self, init_time, init_rect, labels=None, last_time=None, attributes=None):
+        '''Create a trasking task.
+
+        Args:
+            init_time -- Time of supervision (in frames).
+            init_rect -- Rectangle dict.
+            labels -- SparseTimeSeries of frame annotation dicts.
+                Does not include first frame.
+            last_time -- Time of last frame of interest, inclusive (optional).
+                Consider frames init_time <= t <= last_time.
+            attributes -- Dictionary with extra attributes.
+
+        If last_time is None, then the last frame of labels will be used.
+        '''
+        self.init_time = init_time
+        self.init_rect = init_rect
+        if labels:
+            if init_time in labels:
+                raise ValueError('labels should not contain init time')
+        self.labels = labels
+        if last_time is None and labels is not None:
+            self.last_time = labels.sorted_keys()[-1]
+        else:
+            self.last_time = last_time
+        self.attributes = attributes or {}
+
+    def len(self):
+        return self.last_time - self.init_time + 1
+
+
+def make_task_from_track(track):
+    '''Creates a tracking task from a track annotation.
+
+    The first frame is adopted as initialization.
+    The remaining frames become the ground-truth rectangles.
+    '''
+    frames = track['frames'].sorted_items()
+    init_time, init_annot = frames[0]
+    labels = SparseTimeSeries(frames[1:])
+    # TODO: Check that init_annot['exemplar'] is True.
+    init_rect = {k: init_annot[k] for k in ['xmin', 'xmax', 'ymin', 'ymax']}
+    attributes = {k: v for k, v in track.items() if k not in {'frames'}}
+    return Task(init_time, init_rect, labels=labels, attributes=attributes)
 
 
 class VideoObjectDict(object):

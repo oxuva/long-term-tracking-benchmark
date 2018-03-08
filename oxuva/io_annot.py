@@ -29,7 +29,7 @@ def load_annotations_csv(fp):
     tracks = util.VideoObjectDict()
     for vid_obj in rows_by_track.keys():
         # vid_id, obj_id = vid_obj
-        frames = util.TimeSeries()
+        frames = util.SparseTimeSeries()
         for row in rows_by_track[vid_obj]:
             present = _parse_is_present(row['object_presence'])
             # TODO: Support 'exemplar' field in CSV format?
@@ -84,9 +84,7 @@ def dump_annotations_csv(tracks, fp):
 
 def _start_time(track):
     frames = track['frames']
-    if not isinstance(frames, util.TimeSeries):
-        raise TypeError('type is not TimeSeries: {}'.format(type(frames)))
-    return frames.keys()[0]
+    return frames.sorted_keys()[0]
 
 
 def _parse_is_present(s):

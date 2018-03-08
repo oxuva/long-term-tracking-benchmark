@@ -42,7 +42,7 @@ def load_predictions_csv(fp):
     # fp.seek(0)
     reader = _dict_reader_optional_fieldnames(fp, PREDICTION_FIELD_NAMES)
 
-    preds = util.TimeSeries()
+    preds = util.SparseTimeSeries()
     for row in reader:
         present = util.str2bool(row['present'])
         t = int(row['frame_num'])
@@ -79,7 +79,7 @@ def dump_predictions_csv(vid_id, obj_id, predictions, fp):
     Args:
         vid_id: String.
         obj_id: String.
-        predictions: TimeSeries of prediction dicts.
+        predictions: SparseTimeSeries of prediction dicts.
         fp: File-like object with write().
     '''
     writer = csv.DictWriter(fp, fieldnames=PREDICTION_FIELD_NAMES)

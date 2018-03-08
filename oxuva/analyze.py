@@ -3,7 +3,7 @@ from __future__ import division
 from __future__ import print_function
 
 import argparse
-import colorsys
+import itertools
 import json
 import numpy as np
 import math
@@ -18,13 +18,12 @@ from oxuva import assess
 from oxuva import io
 from oxuva import util
 
-from itertools import cycle
-
 FRAME_RATE = 30
 
 MARKERS = ['o', 'v', '^', '<', '>', 's', 'd']  # '*'
+CMAP_PREFERENCE = ['tab10', 'tab20', 'hsv']
 GRID_COLOR = plt.rcParams['grid.color']  # '#cccccc'
-CLEARANCE = 1.2  # Axis range is CLEARANCE * max_value, rounded up.
+CLEARANCE = 1.1  # Axis range is CLEARANCE * max_value, rounded up.
 
 ARGS_FORMATTER = argparse.ArgumentDefaultsHelpFormatter  # Show default values
 
@@ -63,7 +62,6 @@ def _add_arguments(parser):
     plot_parser = subparsers.add_parser(
         'plot', parents=[common, plot_args], formatter_class=ARGS_FORMATTER)
     plot_parser.add_argument('--no_level_sets', action='store_false', dest='level_sets')
-    # plot_parser.add_argument('--posthoc', action='store_true')
 
     # interval_plot: Produce a figure for interval ranges (0, t) and (t, inf).
     interval_parser = subparsers.add_parser(
@@ -81,52 +79,54 @@ def main():
     args = parser.parse_args()
 
     tracks_file = os.path.join('annotations', args.data + '.csv')
-    annotations = _load_annotations(tracks_file)
+    tasks = _load_tasks(tracks_file)
     tracker_names = _load_tracker_names()
 
     # Assign colors and markers alphabetically to achieve invariance across plots.
     trackers = sorted(tracker_names.keys(), key=lambda s: s.lower())
-    tracker_colors = {tracker: color
-                      for tracker, color in zip(trackers, _generate_colors(len(trackers), v=0.9))}
-    tracker_markers = {tracker: marker
-                       for tracker, marker in zip(trackers, cycle(MARKERS))}
+    color_list = _generate_colors(len(trackers))
+    tracker_colors = dict(zip(trackers, color_list))
+    tracker_markers = dict(zip(trackers, itertools.cycle(MARKERS)))
 
-    # Each element assessment[tracker][iou] is a VideoObjectDict
-    # of TimeSeries of frame assessments.
-    # TODO: Is it unsafe to use float (iou) as dictionary key?
-    assessment = {}
+    # Each element preds[tracker] is a VideoObjectDict of TimeSeries of prediction dicts.
+    # Only predictions for frames with ground-truth labels are kept.
+    # This is much smaller than the predictions for all frames, and is therefore cached.
+    predictions = {}
     pred_dir = os.path.join('predictions', args.data)
     for tracker_ind, tracker in enumerate(trackers):
-        for iou_ind, iou in enumerate(args.iou_thresholds):
-            log_context = 'tracker {}/{} {}: iou {}/{} {}'.format(
-                tracker_ind + 1, len(trackers), tracker,
-                iou_ind + 1, len(args.iou_thresholds), iou)
-            cache_file = os.path.join(
-                args.data, 'assessment', '{}_{}.pickle'.format(tracker, iou))
-            assessment.setdefault(tracker, {})[iou] = util.cache_pickle(
-                os.path.join(args.cache_dir, 'analyze', cache_file),
-                lambda: _load_predictions_and_assess(
-                    annotations, iou,
-                    tracker_pred_dir=os.path.join(pred_dir, tracker),
-                    log_prefix=log_context + ': '),
-                ignore_existing=args.ignore_cache,
-                verbose=args.verbose)
+        log_context = 'tracker {}/{} {}'.format(
+            tracker_ind + 1, len(trackers), tracker)
+        cache_file = os.path.join(
+            args.data, 'predictions', '{}.pickle'.format(tracker))
+        predictions[tracker] = util.cache_pickle(
+            os.path.join(args.cache_dir, 'analyze', cache_file),
+            lambda: _load_predictions_and_select_frames(
+                tasks, os.path.join(pred_dir, tracker),
+                log_prefix=log_context + ': '),
+            ignore_existing=args.ignore_cache,
+            verbose=args.verbose)
 
+    # Each element assessment[tracker][iou] is a VideoObjectDict
+    # of TimeSeries of frame assessment dicts.
+    # TODO: Is it unsafe to use float (iou) as dictionary key?
+    assessment = {tracker: {iou: util.VideoObjectDict({
+        key: assess.assess_sequence(tasks[key].labels, predictions[tracker][key], iou)
+        for key in tasks}) for iou in args.iou_thresholds} for tracker in trackers}
     # Each element quality[tracker][iou] is a VideoObjectDict of sequence summary dicts.
-    quality = {tracker: {iou:
-                         util.VideoObjectDict(_map_dict(assess.summarize_sequence, assessment[tracker][iou]))
-                         for iou in args.iou_thresholds} for tracker in trackers}
+    quality = {tracker: {iou: util.VideoObjectDict(
+        _map_dict(assess.summarize_sequence, assessment[tracker][iou]))
+        for iou in args.iou_thresholds} for tracker in trackers}
 
     if args.subcommand == 'table':
         _print_statistics(quality, tracker_names)
     elif args.subcommand == 'plot':
         for iou in args.iou_thresholds:
-            _plot_statistics(quality, trackers, iou,
+            _plot_statistics(assessment, quality, trackers, iou,
                              tracker_names, tracker_colors, tracker_markers)
     elif args.subcommand == 'interval_plot':
         for iou in args.iou_thresholds:
             _plot_intervals(
-                annotations, assessment, trackers, iou,
+                tasks, assessment, trackers, iou,
                 tracker_names, tracker_colors, tracker_markers)
 
 
@@ -144,7 +144,7 @@ def _load_tracker_names():
     return union
 
 
-def _load_annotations(fname):
+def _load_tasks(fname):
     with open(fname, 'r') as fp:
         # if fname.endswith('.json'):
         #     tracks = json.load(fp)
@@ -152,41 +152,40 @@ def _load_annotations(fname):
             tracks = io.load_annotations_csv(fp)
         else:
             raise ValueError('unknown extension: {}'.format(fname))
-    return tracks
+    return util.VideoObjectDict(_map_dict(util.make_task_from_track, tracks))
 
 
-def _load_predictions_and_assess(annotations, iou_threshold, tracker_pred_dir, log_prefix=''):
-    '''Loads all predictions of a tracker.
+def _load_predictions_and_select_frames(tasks, tracker_pred_dir, log_prefix=''):
+    '''Loads all predictions of a tracker and takes the subset of frames with ground truth.
 
     Args:
-        annotations -- VideoObjectDict of track annotations.
+        tasks -- VideoObjectDict of Tasks.
         tracker_pred_dir -- Directory that contains files video_object.csv
 
     Returns:
-        VideoObjectDict of TimeSeries of frame assessments.
+        VideoObjectDict of SparseTimeSeries of frame assessments.
     '''
-    assessment = util.VideoObjectDict()
-    for track_num, vid_obj in enumerate(annotations):
+    preds = util.VideoObjectDict()
+    for track_num, vid_obj in enumerate(tasks.keys()):
         vid, obj = vid_obj
-        annot = annotations[vid_obj]
+        task = tasks[vid_obj]
         track_name = vid + '_' + obj
         log_context = '{}object {}/{} {}'.format(
-            log_prefix, track_num + 1, len(annotations), track_name)
+            log_prefix, track_num + 1, len(tasks), track_name)
         if args.verbose:
             print(log_context, file=sys.stderr)
         pred_file = os.path.join(tracker_pred_dir, '{}.csv'.format(track_name))
         try:
             with open(pred_file, 'r') as fp:
                 pred = io.load_predictions_csv(fp)
-            assessment[vid_obj] = assess.assess_sequence(
-                annot['frames'], pred, iou_threshold=iou_threshold,
-                log_prefix='{}: '.format(log_context))
         except IOError, exc:
             if args.permissive:
                 print('warning: exclude track {}: {}'.format(track_name, str(exc)), file=sys.stderr)
             else:
                 raise
-    return assessment
+        pred = assess.subset_using_previous_if_missing(pred, task.labels.sorted_keys())
+        preds[vid_obj] = pred
+    return preds
 
 
 def _print_statistics(quality, names=None):
@@ -212,7 +211,7 @@ def _print_statistics(quality, names=None):
             print(','.join(row), file=f)
 
 
-def _plot_statistics(quality, trackers, iou_threshold,
+def _plot_statistics(assessments, quality, trackers, iou_threshold,
                      names=None, colors=None, markers=None):
     names = names or {}
     colors = colors or {}
@@ -228,24 +227,44 @@ def _plot_statistics(quality, trackers, iou_threshold,
     if args.level_sets:
         _plot_level_sets()
     for tracker in trackers:
-        plt.plot([stats[tracker]['TNR']], [stats[tracker]['TPR']],
-                 label=names.get(tracker, tracker),
-                 marker=markers.get(tracker, None),
-                 color=colors.get(tracker, None),
-                 markerfacecolor='none', markeredgewidth=2, clip_on=False)
+        plt.plot(
+            [stats[tracker]['TNR']], [stats[tracker]['TPR']],
+            label=names.get(tracker, tracker),
+            marker=markers.get(tracker, None),
+            color=colors.get(tracker, None),
+            markerfacecolor='none', markeredgewidth=2, clip_on=False)
     max_tpr = max([stats[tracker]['TPR'] for tracker in trackers])
     plt.xlim(xmin=0, xmax=1)
     plt.ylim(ymin=0, ymax=_ceil_multiple(CLEARANCE * max_tpr, 0.1))
     plt.grid(color=GRID_COLOR)
+    legend = lambda: plt.legend(loc='lower left', bbox_to_anchor=(0.05, 0))
+    legend()
     plot_dir = os.path.join('analysis', args.data, args.challenge)
     _ensure_dir_exists(plot_dir)
     base_name = 'stats_iou_{}'.format(iou_threshold)
-    _save_fig(os.path.join(plot_dir, base_name + '_no_legend.pdf'))
-    plt.legend(loc='upper right')
     _save_fig(os.path.join(plot_dir, base_name + '.pdf'))
+    plt.gca().legend().set_visible(False)
+    _save_fig(os.path.join(plot_dir, base_name + '_no_legend.pdf'))
+
+    # Add posthoc-threshold curves to figure.
+    legend()
+    for tracker in trackers:
+        _plot_posthoc_curve(assessments[tracker][iou_threshold],
+                            marker='', color=colors.get(tracker, None))
+    _save_fig(os.path.join(plot_dir, base_name + '_posthoc.pdf'))
+    plt.gca().legend().set_visible(False)
+    _save_fig(os.path.join(plot_dir, base_name + '_posthoc_no_legend.pdf'))
 
 
-def _plot_intervals(annotations, assessment, trackers, iou_threshold,
+def _plot_posthoc_curve(assessments, **kwargs):
+    frames = list(itertools.chain(*[series.values() for series in assessments.values()]))
+    operating_points = assess.posthoc_threshold(frames)
+    metrics = map(assess.quality_metrics, operating_points)
+    plt.plot([point['TNR'] for point in metrics],
+             [point['TPR'] for point in metrics], **kwargs)
+
+
+def _plot_intervals(tasks, assessment, trackers, iou_threshold,
                     names=None, colors=None, markers=None):
     names = names or {}
     colors = colors or {}
@@ -265,17 +284,17 @@ def _plot_intervals(annotations, assessment, trackers, iou_threshold,
     points = {}
     for mode in INTERVAL_TYPES:
         intervals[mode], points[mode] = _make_intervals(times_sec, mode)
-    stats = {mode: {tracker:
-                    _interval_stats(annotations, assessment[tracker][iou_threshold], intervals[mode])
-                    for tracker in trackers} for mode in INTERVAL_TYPES}
-    tpr = {mode: {tracker:
-                  [s.get('TPR', None) for s in stats[mode][tracker]]
-                  for tracker in trackers} for mode in INTERVAL_TYPES}
+    stats = {mode: {tracker: _interval_stats(
+        tasks, assessment[tracker][iou_threshold], intervals[mode])
+        for tracker in trackers} for mode in INTERVAL_TYPES}
+    tpr = {mode: {tracker: [
+        s.get('TPR', None) for s in stats[mode][tracker]]
+        for tracker in trackers} for mode in INTERVAL_TYPES}
 
     # Find maximum TPR value over all plots (to have same axes).
-    max_tpr = {mode:
-               max(val for tracker in trackers for val in tpr[mode][tracker] if val is not None)
-               for mode in INTERVAL_TYPES}
+    max_tpr = {mode: max(
+        val for tracker in trackers for val in tpr[mode][tracker] if val is not None)
+        for mode in INTERVAL_TYPES}
 
     for mode in INTERVAL_TYPES:
         plt.figure(figsize=(args.width_inches, args.height_inches))
@@ -327,13 +346,13 @@ def _make_intervals(values, interval_type):
     return intervals, points
 
 
-def _interval_stats(annotations, assessment, intervals):
+def _interval_stats(tasks, assessment, intervals):
     '''Computes the quality statistics for each interval.
 
     Args:
-        annotations -- VideoObjectDict of TimeSeries of frame annotation dicts.
+        tasks -- VideoObjectDict of Tasks.
             This is required to get the initial frame number of each track.
-        assessment -- VideoObjectDict of TimeSeries of frame assessment dicts.
+        assessment -- VideoObjectDict of SparseTimeSeries of frame assessment dicts.
         intervals -- List of tuples [(a, b), ...]
 
     Returns:
@@ -342,8 +361,8 @@ def _interval_stats(annotations, assessment, intervals):
     stats = [None for _ in intervals]
     for interval_index, (a_sec, b_sec) in enumerate(intervals):
         quality = util.VideoObjectDict()
-        for vid_obj in annotations:
-            t0 = _start_time(annotations[vid_obj])  # in number of frames
+        for vid_obj in tasks:
+            t0 = tasks[vid_obj].init_time  # in number of frames
             subseq = _select_interval(
                 assessment[vid_obj],
                 t0 + FRAME_RATE * a_sec,
@@ -354,14 +373,7 @@ def _interval_stats(annotations, assessment, intervals):
 
 
 def _select_interval(frames, a, b):
-    return {t: x for t, x in frames.items() if a <= t <= b}
-
-
-def _start_time(annotation):
-    frames = annotation['frames']
-    if not isinstance(frames, util.TimeSeries):
-        raise TypeError('type is not TimeSeries: {}'.format(type(frames)))
-    return frames.keys()[0]
+    return util.SparseTimeSeries({t: x for t, x in frames.sorted_items() if a <= t <= b})
 
 
 def _map_dict(f, x):
@@ -373,8 +385,13 @@ def _ensure_dir_exists(dir):
         os.makedirs(dir)
 
 
-def _generate_colors(n, s=1.0, v=1.0):
-    return [colorsys.hsv_to_rgb(i / n, s, v) for i in range(n)]
+def _generate_colors(n):
+    # return [colorsys.hsv_to_rgb(i / n, s, v) for i in range(n)]
+    for cmap_name in CMAP_PREFERENCE:
+        cmap = matplotlib.cm.get_cmap(cmap_name)
+        if n <= cmap.N:
+            break
+    return [cmap(float(i) / n) for i in range(n)]
 
 
 def _save_fig(plot_file):
