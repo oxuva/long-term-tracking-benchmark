@@ -22,7 +22,7 @@ FRAME_RATE = 30
 
 MARKERS = ['o', 'v', '^', '<', '>', 's', 'd']  # '*'
 CMAP_PREFERENCE = ['tab10', 'tab20', 'hsv']
-GRID_COLOR = plt.rcParams['grid.color']  # '#cccccc'
+GRID_COLOR = '0.85'  # plt.rcParams['grid.color']
 CLEARANCE = 1.1  # Axis range is CLEARANCE * max_value, rounded up.
 
 ARGS_FORMATTER = argparse.ArgumentDefaultsHelpFormatter  # Show default values
@@ -62,6 +62,7 @@ def _add_arguments(parser):
     plot_parser = subparsers.add_parser(
         'plot', parents=[common, plot_args], formatter_class=ARGS_FORMATTER)
     plot_parser.add_argument('--no_level_sets', action='store_false', dest='level_sets')
+    plot_parser.add_argument('--no_lower_bounds', action='store_false', dest='lower_bounds')
 
     # interval_plot: Produce a figure for interval ranges (0, t) and (t, inf).
     interval_parser = subparsers.add_parser(
@@ -230,18 +231,23 @@ def _plot_statistics(assessments, quality, trackers, iou_threshold,
         plt.plot(
             [stats[tracker]['TNR']], [stats[tracker]['TPR']],
             label=names.get(tracker, tracker),
-            marker=markers.get(tracker, None),
             color=colors.get(tracker, None),
+            marker=markers.get(tracker, None),
             markerfacecolor='none', markeredgewidth=2, clip_on=False)
+        if args.lower_bounds:
+            plt.plot(
+                [stats[tracker]['TNR'], 1], [stats[tracker]['TPR'], 0],
+                color=colors.get(tracker, None),
+                linestyle='dashed', marker='')
     max_tpr = max([stats[tracker]['TPR'] for tracker in trackers])
     plt.xlim(xmin=0, xmax=1)
-    plt.ylim(ymin=0, ymax=_ceil_multiple(CLEARANCE * max_tpr, 0.1))
+    plt.ylim(ymin=0, ymax=_ceil_nearest(CLEARANCE * max_tpr, 0.1))
     plt.grid(color=GRID_COLOR)
     legend = lambda: plt.legend(loc='lower left', bbox_to_anchor=(0.05, 0))
     legend()
     plot_dir = os.path.join('analysis', args.data, args.challenge)
     _ensure_dir_exists(plot_dir)
-    base_name = 'stats_iou_{}'.format(iou_threshold)
+    base_name = 'stats_iou_{}'.format(_float2str_latex(iou_threshold))
     _save_fig(os.path.join(plot_dir, base_name + '.pdf'))
     plt.gca().legend().set_visible(False)
     _save_fig(os.path.join(plot_dir, base_name + '_no_legend.pdf'))
@@ -308,11 +314,11 @@ def _plot_intervals(tasks, assessment, trackers, iou_threshold,
                      markerfacecolor='none', markeredgewidth=2, clip_on=False)
         plt.xlim(xmin=0, xmax=args.max_time / 60.0)
         ymax = max(max_tpr.values()) if args.same_axes else max_tpr[mode]
-        plt.ylim(ymin=0, ymax=_ceil_multiple(CLEARANCE * ymax, 0.1))
+        plt.ylim(ymin=0, ymax=_ceil_nearest(CLEARANCE * ymax, 0.1))
         plt.grid(color=GRID_COLOR)
         plot_dir = os.path.join('analysis', args.data, args.challenge)
         _ensure_dir_exists(plot_dir)
-        base_name = 'interval_{}_iou_{}'.format(mode, iou_threshold)
+        base_name = 'interval_{}_iou_{}'.format(mode, _float2str_latex(iou_threshold))
         _save_fig(os.path.join(plot_dir, base_name + '_no_legend.pdf'))
         plt.legend()
         _save_fig(os.path.join(plot_dir, base_name + '.pdf'))
@@ -405,15 +411,20 @@ def _plot_level_sets(n=10, num_points=100):
     for gm in np.asfarray(range(1, n)) / n:
         # gm = sqrt(x*y); y = gm^2 / x
         y = gm**2 / x
-        plt.plot(x, y, color=GRID_COLOR, linewidth=1, linestyle='dashed')
+        plt.plot(x, y, color=GRID_COLOR, linewidth=1, linestyle='dotted')
 
 
-def _ceil_multiple(x, step):
+def _ceil_nearest(x, step):
+    '''Rounds up to nearest multiple of step.'''
     return math.ceil(x / step) * step
 
 
 def _stats_sort_key(stats):
     return (stats['GM'], stats['TPR'], stats['TNR'])
+
+
+def _float2str_latex(x):
+    return str(x).replace('.', 'd')
 
 
 if __name__ == '__main__':
