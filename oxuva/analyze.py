@@ -77,6 +77,10 @@ def _add_arguments(parser):
     subparser.add_argument('--time_step', type=int, default=60, help='seconds')
     subparser.add_argument('--no_same_axes', dest='same_axes', action='store_false')
 
+    # plot_present_absent: Produce a figure (one figure per IOU threshold)
+    subparser = subparsers.add_parser('plot_present_absent', formatter_class=ARGS_FORMATTER,
+                                      parents=[common, plot_args])
+
 
 def main():
     parser = argparse.ArgumentParser(formatter_class=ARGS_FORMATTER)
@@ -131,6 +135,10 @@ def main():
         for iou in args.iou_thresholds:
             _plot_intervals(assessments, tasks, trackers, iou,
                             tracker_names, tracker_colors, tracker_markers)
+    elif args.subcommand == 'plot_present_absent':
+        for iou in args.iou_thresholds:
+            _plot_present_absent(assessments, tasks, trackers, iou,
+                                    tracker_names, tracker_colors, tracker_markers)
 
 
 def _load_tracker_names():
@@ -362,6 +370,58 @@ def _plot_intervals(assessments, tasks, trackers, iou_threshold,
         _save_fig(os.path.join(plot_dir, base_name + '_no_legend.pdf'))
         plt.legend()
         _save_fig(os.path.join(plot_dir, base_name + '.pdf'))
+
+
+def _plot_present_absent(
+        assessments, tasks, trackers, iou_threshold,
+        names=None, colors=None, markers=None):
+    names = names or {}
+    colors = colors or {}
+    markers = markers or {}
+
+    # Find subset of tasks that have absent frames.
+    subset_present = [key for key, task in tasks.items()
+                      if all([label['present'] for t, label in task.labels.items()])]
+    subset_absent = [key for key, task in tasks.items()
+                     if not all([label['present'] for t, label in task.labels.items()])]
+
+    stats_all = {
+        tracker: _dataset_quality(assessments[tracker][iou_threshold])
+        for tracker in trackers}
+    stats_all_present = {
+        tracker: _dataset_quality(
+            {key: assessments[tracker][iou_threshold][key] for key in subset_present})
+        for tracker in trackers}
+    stats_any_absent = {
+        tracker: _dataset_quality(
+            {key: assessments[tracker][iou_threshold][key] for key in subset_absent})
+        for tracker in trackers}
+
+    order = sorted(trackers, key=lambda t: _stats_sort_key(stats_all[t]), reverse=True)
+    max_tpr = max(max([stats_all_present[tracker]['TPR'] for tracker in trackers]),
+                  max([stats_any_absent[tracker]['TPR'] for tracker in trackers]))
+
+    plt.figure(figsize=(args.width_inches, args.height_inches))
+    plt.xlabel('TPR (tracks without absent labels)')
+    plt.ylabel('TPR (tracks with some absent labels)')
+    for tracker in order:
+        plt.plot(
+            [stats_all_present[tracker]['TPR']], [stats_any_absent[tracker]['TPR']],
+            label=names.get(tracker, tracker),
+            color=colors.get(tracker, None),
+            marker=markers.get(tracker, None),
+            markerfacecolor='none', markeredgewidth=2, clip_on=False)
+    plt.xlim(xmin=0, xmax=_ceil_nearest(CLEARANCE * max_tpr, 0.1))
+    plt.ylim(ymin=0, ymax=_ceil_nearest(CLEARANCE * max_tpr, 0.1))
+    plt.grid(color=GRID_COLOR)
+    # Draw a diagonal line.
+    plt.plot([0, 1], [0, 1], color=GRID_COLOR, linewidth=1, linestyle='dotted')
+    plot_dir = os.path.join('analysis', args.data, args.challenge)
+    _ensure_dir_exists(plot_dir)
+    base_name = 'present_absent_iou_{}'.format(_float2str_latex(iou_threshold))
+    # _save_fig(os.path.join(plot_dir, base_name + '_no_legend.pdf'))
+    plt.legend()
+    _save_fig(os.path.join(plot_dir, base_name + '.pdf'))
 
 
 def _make_intervals(values, interval_type):
