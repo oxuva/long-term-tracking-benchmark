@@ -37,7 +37,7 @@ INTERVAL_AXIS_LABEL = {
 
 def _add_arguments(parser):
     common = argparse.ArgumentParser(add_help=False)
-    common.add_argument('--data', default='dev', help='{dev,test}')
+    common.add_argument('--data', default='dev', help='{dev,test,devtest}')
     common.add_argument('--challenge', default='constrained',
                         help='{open,constrained,all}')
     common.add_argument('--verbose', '-v', action='store_true')
@@ -83,10 +83,14 @@ def main():
     global args
     args = parser.parse_args()
 
-    tracks_file = os.path.join('annotations', args.data + '.csv')
-    tasks = _load_tasks(tracks_file)
-    tracker_names = _load_tracker_names()
+    dataset_names = _get_datasets(args.data)
+    dataset_tasks = {dataset: _load_tasks(os.path.join('annotations', dataset + '.csv'))
+                     for dataset in dataset_names}
+    # Take union of all datasets.
+    tasks = {key: task for dataset in dataset_names
+             for key, task in dataset_tasks[dataset].items()}
 
+    tracker_names = _load_tracker_names()
     # Assign colors and markers alphabetically to achieve invariance across plots.
     trackers = sorted(tracker_names.keys(), key=lambda s: s.lower())
     color_list = _generate_colors(len(trackers))
@@ -97,26 +101,25 @@ def main():
     # Only predictions for frames with ground-truth labels are kept.
     # This is much smaller than the predictions for all frames, and is therefore cached.
     predictions = {}
-    pred_dir = os.path.join('predictions', args.data)
-    for tracker_ind, tracker in enumerate(trackers):
-        log_context = 'tracker {}/{} {}'.format(
-            tracker_ind + 1, len(trackers), tracker)
-        cache_file = os.path.join(
-            args.data, 'predictions', '{}.pickle'.format(tracker))
-        predictions[tracker] = util.cache_pickle(
-            os.path.join(args.cache_dir, 'analyze', cache_file),
-            lambda: _load_predictions_and_select_frames(
-                tasks, os.path.join(pred_dir, tracker),
-                log_prefix=log_context + ': '),
-            ignore_existing=args.ignore_cache,
-            verbose=args.verbose)
+    for dataset in dataset_names:
+        for tracker_ind, tracker in enumerate(trackers):
+            log_context = 'tracker {}/{} {}'.format(tracker_ind + 1, len(trackers), tracker)
+            cache_file = os.path.join(dataset, 'predictions', '{}.pickle'.format(tracker))
+            predictions.setdefault(tracker, {}).update(util.cache_pickle(
+                os.path.join(args.cache_dir, 'analyze', cache_file),
+                lambda: _load_predictions_and_select_frames(
+                    dataset_tasks[dataset],
+                    os.path.join('predictions', dataset, tracker),
+                    log_prefix=log_context + ': '),
+                ignore_existing=args.ignore_cache,
+                verbose=args.verbose))
 
     # Each element assessments[tracker][iou] is a VideoObjectDict
     # of TimeSeries of frame assessment dicts.
     # TODO: Is it unsafe to use float (iou) as dictionary key?
     assessments = {tracker: {iou: {
-        key: assess.assess_sequence(tasks[key].labels, predictions[tracker][key], iou)
-        for key in tasks} for iou in args.iou_thresholds} for tracker in trackers}
+        track: assess.assess_sequence(tasks[track].labels, predictions[tracker][track], iou)
+        for track in tasks} for iou in args.iou_thresholds} for tracker in trackers}
 
     if args.subcommand == 'table':
         _print_statistics(assessments, trackers, tracker_names)
@@ -137,17 +140,27 @@ def main():
 
 
 def _load_tracker_names():
-    if args.challenge == 'all':
-        challenges = ['constrained', 'open']
-    else:
-        challenges = [args.challenge]
-
+    challenges = _get_challenges(args.challenge)
     union = {}
     for c in challenges:
         with open('trackers_{}.json'.format(c), 'r') as f:
             tracker_names = json.load(f)
         union.update(tracker_names)
     return union
+
+
+def _get_challenges(name):
+    if name == 'all':
+        return ['constrained', 'open']
+    else:
+        return [name]
+
+
+def _get_datasets(name):
+    if name == 'devtest':
+        return ['dev', 'test']
+    else:
+        return [name]
 
 
 def _load_tasks(fname):
