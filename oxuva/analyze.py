@@ -52,25 +52,30 @@ def _add_arguments(parser):
     plot_args.add_argument('--width_inches', type=float, default=5.0)
     plot_args.add_argument('--height_inches', type=float, default=4.0)
 
+    tpr_tnr_args = argparse.ArgumentParser(add_help=False)
+    tpr_tnr_args.add_argument('--no_level_sets', dest='level_sets', action='store_false')
+    tpr_tnr_args.add_argument('--no_lower_bounds', dest='lower_bounds', action='store_false')
+
     subparsers = parser.add_subparsers(dest='subcommand', help='Analysis mode')
 
     # table: Produce a table (one column per IOU threshold)
-    table_parser = subparsers.add_parser(
-        'table', parents=[common], formatter_class=ARGS_FORMATTER)
+    subparser = subparsers.add_parser('table', formatter_class=ARGS_FORMATTER, parents=[common])
 
-    # plot: Produce a figure (one figure per IOU threshold)
-    plot_parser = subparsers.add_parser(
-        'plot', parents=[common, plot_args], formatter_class=ARGS_FORMATTER)
-    plot_parser.add_argument('--no_level_sets', action='store_false', dest='level_sets')
-    plot_parser.add_argument('--no_lower_bounds', action='store_false', dest='lower_bounds')
+    # plot_tpr_tnr: Produce a figure (one figure per IOU threshold)
+    subparser = subparsers.add_parser('plot_tpr_tnr', formatter_class=ARGS_FORMATTER,
+                                      parents=[common, plot_args, tpr_tnr_args])
 
-    # interval_plot: Produce a figure for interval ranges (0, t) and (t, inf).
-    interval_parser = subparsers.add_parser(
-        'interval_plot', parents=[common, plot_args], formatter_class=ARGS_FORMATTER)
-    # interval_parser.add_argument('--min_time', type=float, default=0, help='seconds')
-    interval_parser.add_argument('--max_time', type=int, default=600, help='seconds')
-    interval_parser.add_argument('--time_step', type=int, default=60, help='seconds')
-    interval_parser.add_argument('--no_same_axes', action='store_false', dest='same_axes')
+    # plot_tpr_tnr_intervals: Produce a figure (one figure per IOU threshold)
+    subparser = subparsers.add_parser('plot_tpr_tnr_intervals', formatter_class=ARGS_FORMATTER,
+                                      parents=[common, plot_args, tpr_tnr_args])
+    subparser.add_argument('--times', type=int, default=[0, 60, 120, 240], help='seconds')
+
+    # plot_tpr_time: Produce a figure for interval ranges (0, t) and (t, inf).
+    subparser = subparsers.add_parser('plot_tpr_time', formatter_class=ARGS_FORMATTER,
+                                      parents=[common, plot_args])
+    subparser.add_argument('--max_time', type=int, default=600, help='seconds')
+    subparser.add_argument('--time_step', type=int, default=60, help='seconds')
+    subparser.add_argument('--no_same_axes', dest='same_axes', action='store_false')
 
 
 def main():
@@ -116,11 +121,13 @@ def main():
 
     if args.subcommand == 'table':
         _print_statistics(assessments, trackers, tracker_names)
-    elif args.subcommand == 'plot':
-        for iou in args.iou_thresholds:
-            _plot_statistics(assessments, trackers, iou,
-                             tracker_names, tracker_colors, tracker_markers)
-    elif args.subcommand == 'interval_plot':
+    elif args.subcommand == 'plot_tpr_tnr':
+        _plot_tpr_tnr_overall(assessments, tasks, trackers,
+                              tracker_names, tracker_colors, tracker_markers)
+    elif args.subcommand == 'plot_tpr_tnr_intervals':
+        _plot_tpr_tnr_intervals(assessments, tasks, trackers,
+                                tracker_names, tracker_colors, tracker_markers)
+    elif args.subcommand == 'plot_tpr_time':
         for iou in args.iou_thresholds:
             _plot_intervals(assessments, tasks, trackers, iou,
                             tracker_names, tracker_colors, tracker_markers)
@@ -205,54 +212,92 @@ def _print_statistics(assessments, trackers, names=None):
             print(','.join(row), file=f)
 
 
-def _plot_statistics(assessments, trackers, iou_threshold,
-                     min_time=None, max_time=None,
-                     names=None, colors=None, markers=None):
+def _plot_tpr_tnr_overall(assessments, tasks, trackers,
+                          names=None, colors=None, markers=None):
+    for iou in args.iou_thresholds:
+        _plot_tpr_tnr('tpr_tnr_iou_{}'.format(_float2str_latex(iou)),
+                      assessments, tasks, trackers, iou,
+                      names=names, colors=colors, markers=markers,
+                      min_time=None, max_time=None,
+                      legend_kwargs=dict(loc='lower left', bbox_to_anchor=(0.05, 0)))
+
+
+def _plot_tpr_tnr_intervals(assessments, tasks, trackers,
+                            names=None, colors=None, markers=None):
+    modes = ['before', 'after']
+    intervals = {}
+    for mode in modes:
+        intervals[mode], _ = _make_intervals(args.times, mode)
+
+    for iou in args.iou_thresholds:
+        # Get stats for all plots to establish axis range.
+        # Note: This means that _dataset_quality_interval() is called twice.
+        max_tpr = max([max([max([
+            _dataset_quality_interval(assessments[tracker][iou], tasks, min_time, max_time)['TPR']
+            for tracker in trackers]) for min_time, max_time in intervals[mode]]) for mode in modes])
+
+        for mode in modes:
+            for min_time, max_time in intervals[mode]:
+                base_name = 'tpr_tnr_iou_{}_interval_{}_{}'.format(
+                    _float2str_latex(iou), _float2str_latex(min_time), _float2str_latex(max_time))
+                _plot_tpr_tnr(base_name, assessments, tasks, trackers, iou,
+                              min_time=min_time, max_time=max_time,
+                              max_tpr=max_tpr, enable_posthoc=False,
+                              names=names, colors=colors, markers=markers,
+                              legend_kwargs=dict(loc='upper right'))
+
+
+def _plot_tpr_tnr(base_name, assessments, tasks, trackers, iou_threshold,
+                  min_time=None, max_time=None, max_tpr=None, enable_posthoc=True,
+                  names=None, colors=None, markers=None, legend_kwargs=None):
     names = names or {}
     colors = colors or {}
     markers = markers or {}
+    legend_kwargs = legend_kwargs or {}
 
-    stats = {tracker: _dataset_quality(assessments[tracker][iou_threshold])
-             for tracker in trackers}
+    for iou in args.iou_thresholds:
+        stats = {tracker: _dataset_quality_interval(
+            assessments[tracker][iou_threshold], tasks, min_time, max_time)
+            for tracker in trackers}
 
-    plt.figure(figsize=(args.width_inches, args.height_inches))
-    plt.xlabel('True Negative Rate (Absent)')
-    plt.ylabel('True Positive Rate (Present)')
-    if args.level_sets:
-        _plot_level_sets()
-    for tracker in trackers:
-        plt.plot(
-            [stats[tracker]['TNR']], [stats[tracker]['TPR']],
-            label=names.get(tracker, tracker),
-            color=colors.get(tracker, None),
-            marker=markers.get(tracker, None),
-            markerfacecolor='none', markeredgewidth=2, clip_on=False)
-        if args.lower_bounds:
+        plt.figure(figsize=(args.width_inches, args.height_inches))
+        plt.xlabel('True Negative Rate (Absent)')
+        plt.ylabel('True Positive Rate (Present)')
+        if args.level_sets:
+            _plot_level_sets()
+        for tracker in trackers:
             plt.plot(
-                [stats[tracker]['TNR'], 1], [stats[tracker]['TPR'], 0],
+                [stats[tracker]['TNR']], [stats[tracker]['TPR']],
+                label=names.get(tracker, tracker),
                 color=colors.get(tracker, None),
-                linestyle='dashed', marker='')
-    max_tpr = max([stats[tracker]['TPR'] for tracker in trackers])
-    plt.xlim(xmin=0, xmax=1)
-    plt.ylim(ymin=0, ymax=_ceil_nearest(CLEARANCE * max_tpr, 0.1))
-    plt.grid(color=GRID_COLOR)
-    legend = lambda: plt.legend(loc='lower left', bbox_to_anchor=(0.05, 0))
-    legend()
-    plot_dir = os.path.join('analysis', args.data, args.challenge)
-    _ensure_dir_exists(plot_dir)
-    base_name = 'stats_iou_{}'.format(_float2str_latex(iou_threshold))
-    _save_fig(os.path.join(plot_dir, base_name + '.pdf'))
-    plt.gca().legend().set_visible(False)
-    _save_fig(os.path.join(plot_dir, base_name + '_no_legend.pdf'))
+                marker=markers.get(tracker, None),
+                markerfacecolor='none', markeredgewidth=2, clip_on=False)
+            if args.lower_bounds:
+                plt.plot(
+                    [stats[tracker]['TNR'], 1], [stats[tracker]['TPR'], 0],
+                    color=colors.get(tracker, None),
+                    linestyle='dashed', marker='')
+        if max_tpr is None:
+            max_tpr = max([stats[tracker]['TPR'] for tracker in trackers])
+        plt.xlim(xmin=0, xmax=1)
+        plt.ylim(ymin=0, ymax=_ceil_nearest(CLEARANCE * max_tpr, 0.1))
+        plt.grid(color=GRID_COLOR)
+        plt.legend(**legend_kwargs)
+        plot_dir = os.path.join('analysis', args.data, args.challenge)
+        _ensure_dir_exists(plot_dir)
+        _save_fig(os.path.join(plot_dir, base_name + '.pdf'))
+        plt.gca().legend().set_visible(False)
+        _save_fig(os.path.join(plot_dir, base_name + '_no_legend.pdf'))
 
-    # Add posthoc-threshold curves to figure.
-    legend()
-    for tracker in trackers:
-        _plot_posthoc_curve(assessments[tracker][iou_threshold],
-                            marker='', color=colors.get(tracker, None))
-    _save_fig(os.path.join(plot_dir, base_name + '_posthoc.pdf'))
-    plt.gca().legend().set_visible(False)
-    _save_fig(os.path.join(plot_dir, base_name + '_posthoc_no_legend.pdf'))
+        if enable_posthoc:
+            # Add posthoc-threshold curves to figure.
+            plt.legend(**legend_kwargs)
+            for tracker in trackers:
+                _plot_posthoc_curve(assessments[tracker][iou_threshold],
+                                    marker='', color=colors.get(tracker, None))
+            _save_fig(os.path.join(plot_dir, base_name + '_posthoc.pdf'))
+            plt.gca().legend().set_visible(False)
+            _save_fig(os.path.join(plot_dir, base_name + '_posthoc_no_legend.pdf'))
 
 
 def _plot_posthoc_curve(assessments, **kwargs):
@@ -367,8 +412,8 @@ def _dataset_quality_interval(assessments, tasks, min_time_seconds, max_time_sec
     Returns:
         List that contains statistics for each interval.
     '''
-    min_time = FRAME_RATE * min_time_seconds
-    max_time = FRAME_RATE * max_time_seconds
+    min_time = None if min_time_seconds is None else FRAME_RATE * min_time_seconds
+    max_time = None if max_time_seconds is None else FRAME_RATE * max_time_seconds
     assessments = {
         vid_obj: util.select_interval(assessments[vid_obj], min_time, max_time,
                                       init_time=tasks[vid_obj].init_time)
