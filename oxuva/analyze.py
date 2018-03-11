@@ -351,7 +351,7 @@ def _plot_intervals(assessments, tasks, trackers, iou_threshold,
         plt.grid(color=GRID_COLOR)
         plot_dir = os.path.join('analysis', args.data, args.challenge)
         _ensure_dir_exists(plot_dir)
-        base_name = 'interval_{}_iou_{}'.format(mode, _float2str_latex(iou_threshold))
+        base_name = 'tpr_time_iou_{}_interval_{}'.format(_float2str_latex(iou_threshold), mode)
         _save_fig(os.path.join(plot_dir, base_name + '_no_legend.pdf'))
         plt.legend()
         _save_fig(os.path.join(plot_dir, base_name + '.pdf'))
