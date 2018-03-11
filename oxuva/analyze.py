@@ -388,24 +388,26 @@ def _plot_present_absent(
     markers = markers or {}
 
     # Find subset of tasks that have absent frames.
-    subset_present = [key for key, task in tasks.items()
-                      if all([label['present'] for t, label in task.labels.items()])]
-    subset_absent = [key for key, task in tasks.items()
-                     if not all([label['present'] for t, label in task.labels.items()])]
+    subset_all_present = [
+        key for key, task in tasks.items()
+        if all([label['present'] for t, label in task.labels.items()])]
+    subset_any_absent = [
+        key for key, task in tasks.items()
+        if not all([label['present'] for t, label in task.labels.items()])]
 
-    stats_all = {
+    stats_whole = {
         tracker: _dataset_quality(assessments[tracker][iou_threshold])
         for tracker in trackers}
     stats_all_present = {
         tracker: _dataset_quality(
-            {key: assessments[tracker][iou_threshold][key] for key in subset_present})
+            {key: assessments[tracker][iou_threshold][key] for key in subset_all_present})
         for tracker in trackers}
     stats_any_absent = {
         tracker: _dataset_quality(
-            {key: assessments[tracker][iou_threshold][key] for key in subset_absent})
+            {key: assessments[tracker][iou_threshold][key] for key in subset_any_absent})
         for tracker in trackers}
 
-    order = sorted(trackers, key=lambda t: _stats_sort_key(stats_all[t]), reverse=True)
+    order = sorted(trackers, key=lambda t: _stats_sort_key(stats_whole[t]), reverse=True)
     max_tpr = max(max([stats_all_present[tracker]['TPR'] for tracker in trackers]),
                   max([stats_any_absent[tracker]['TPR'] for tracker in trackers]))
 
