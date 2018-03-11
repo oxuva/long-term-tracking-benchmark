@@ -1,3 +1,51 @@
+'''
+Examples:
+
+    To evaluate the prediction of a tracker for one tracking task:
+
+        assessment = assess.assess_sequence(task.labels, prediction, iou_threshold=0.5)
+
+    The function assess_sequence() calls subset_using_previous_if_missing() internally.
+    This function may alternatively be called before assess_sequence().
+    The result will be the same because subset_using_previous_if_missing() is idempotent.
+
+        prediction_subset = assess.subset_using_previous_if_missing(
+            prediction, task.labels.sorted_keys())
+        assessment = assess.assess_sequence(
+            task.labels, prediction_subset, iou_threshold=0.5)
+
+    Since assessment is a SparseTimeSeries of frame assessments,
+    we can consider a subset of frames:
+
+        assessment_subset = util.select_interval(
+            assessment, min_time, max_time, init_time=task.init_time)
+
+    To accumulate per-frame assessments into a summary for the sequence:
+
+        sequence_assessment = assess.assessment_sum(frame_assessments)
+
+    This can also be used to accumulate sequence summaries for a dataset:
+
+        dataset_assessment = assess.assessment_sum(sequence_assessments)
+
+    To obtain the performance metrics from the summary:
+
+        stats = assess.quality_metrics(dataset_assessment)
+
+    Full example:
+
+        assessments = {}
+        for key in tasks:
+            assessments[key] = assess.assess_sequence(
+                tasks[key].labels, predictions[key], iou_threshold=0.5)
+
+        sequence_assessments = {
+            vid_obj: assess.assessment_sum(assessments[vid_obj].values())
+            for vid_obj in assessments}
+        dataset_assessment = assess.assessment_sum(sequence_assessments.values())
+        return assess.quality_metrics(dataset_assessment)
+'''
+
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -5,66 +53,29 @@ from __future__ import print_function
 from oxuva import util
 
 
-def summarize_sequence(assessment):
-    '''Converts a per-frame assessment into a cumulative sequence assessment.
-
-    Args:
-        assessment -- SparseTimeSeries of frame assessment dicts.
-    '''
-    quality = {
-        'len': len(assessment),
-        'TP': sum(x['TP'] for t, x in assessment.sorted_items()),
-        'TN': sum(x['TN'] for t, x in assessment.sorted_items()),
-        'FP': sum(x['FP'] for t, x in assessment.sorted_items()),
-        'FN': sum(x['FN'] for t, x in assessment.sorted_items()),
-    }
-    # Compute per-sequence statistics.
-    # However, many sequences do not have any negative (absent frames).
-    # Hence this will be noisy at best and divide by zero at worst.
-    # quality['TPR'] = float(quality['TP']) / (quality['TP'] + quality['FN'])
-    # quality['FNR'] = float(quality['FN']) / (quality['TP'] + quality['FN'])
-    # quality['TNR'] = float(quality['TN']) / (quality['TN'] + quality['FP'])
-    # quality['FPR'] = float(quality['FP']) / (quality['TN'] + quality['FP'])
-    # quality['recall']    = float(quality['TP']) / (quality['TP'] + quality['FN'])
-    # quality['precision'] = float(quality['TP']) / (quality['TP'] + quality['FP'])
-    return quality
-
-
-def quality_metrics(counts):
+def quality_metrics(assessment):
     '''Computes the TPR, TNR from TP, FP, etc.
 
     Args:
-        counts -- Dictionary with TP, FP, TN, FN.
+        assessment -- Dictionary with TP, FP, TN, FN.
     '''
     metrics = {}
-    num_pos = counts['TP'] + counts['FN']
-    num_neg = counts['TN'] + counts['FP']
+    num_pos = assessment['TP'] + assessment['FN']
+    num_neg = assessment['TN'] + assessment['FP']
     if num_pos > 0:
-        metrics['TPR'] = float(counts['TP']) / num_pos
+        metrics['TPR'] = float(assessment['TP']) / num_pos
     # else:
     #     raise ValueError('unable to compute TPR (no positives)')
     if num_neg > 0:
-        metrics['TNR'] = float(counts['TN']) / num_neg
+        metrics['TNR'] = float(assessment['TN']) / num_neg
     # else:
     #     raise ValueError('unable to compute TNR (no negatives)')
     # TODO: Add some errorbars?
-    metrics['GM'] = util.geometric_mean(metrics.get('TPR', 0.0), metrics.get('TNR', 0.0))
+    if num_pos > 0 and num_neg > 0:
+        metrics['GM'] = util.geometric_mean(metrics['TPR'], metrics['TNR'])
+    # Include the raw totals.
+    metrics.update(assessment)
     return metrics
-
-
-def statistics(tracks_quality):
-    '''Computes the TPR and TNR from the quality of many sequences.
-
-    Args:
-        tracks_quality -- List of quality for each track.
-    '''
-    tracks_quality = list(tracks_quality)  # In case tracks_quality is a generator.
-    total = {
-        k: sum([q[k] for q in tracks_quality])
-        for k in ['TP', 'FN', 'FP', 'TN']
-    }
-    total.update(quality_metrics(total))
-    return total
 
 
 def subset_using_previous_if_missing(series, times):
@@ -109,7 +120,7 @@ def subset_using_previous_if_missing(series, times):
     return util.SparseTimeSeries(zip(times, subset))
 
 
-def assess_sequence(gt, pred, iou_threshold, log_prefix=''):
+def assess_sequence(gt, pred, iou_threshold):
     '''Evaluate predicted track against ground-truth annotations.
 
     Args:
@@ -122,9 +133,17 @@ def assess_sequence(gt, pred, iou_threshold, log_prefix=''):
         This is a TimeSeries of frame assessment dicts.
     '''
     times = gt.sorted_keys()
-    assert pred.sorted_keys() == times
-    # pred = subset_using_previous_if_missing(pred, times)
+    # if pred.sorted_keys() != times:
+    pred = subset_using_previous_if_missing(pred, times)
     return util.SparseTimeSeries({t: assess_frame(gt[t], pred[t], iou_threshold) for t in times})
+
+
+def make_assessment(num_frames=0, tp=0, fp=0, tn=0, fn=0):
+    return {'num_frames': num_frames, 'TP': tp, 'TN': tn, 'FP': fp, 'FN': fn}
+
+
+def assessment_sum(assessments):
+    return util.dict_sum_strict(assessments, make_assessment())
 
 
 def assess_frame(gt, pred, iou_threshold):
@@ -143,7 +162,7 @@ def assess_frame(gt, pred, iou_threshold):
     # FN: gt "present" and not (pred "present" and box correct)
     # TN: gt "absent" and pred "absent"
     # FP: gt "absent" and pred "present"
-    result = {'TP': 0, 'TN': 0, 'FP': 0, 'FN': 0}
+    result = make_assessment(num_frames=1)
     if gt['present']:
         if pred['present'] and iou(gt, pred) >= iou_threshold:
             result['TP'] += 1
@@ -186,7 +205,8 @@ def posthoc_threshold(assessments):
     '''Trace curve of operating points by varying score threshold.
 
     Args:
-        assessments: List of frame assessment dicts.
+        assessments: List of sequence assessments.
+            A sequence assessment is a TimeSeries of frame assessments.
     '''
     # Group all "present" predictions (TP, FP) by score.
     by_score = {}

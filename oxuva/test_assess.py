@@ -32,6 +32,13 @@ class TestSubsetUsingPrevious(unittest.TestCase):
         self.assertRaises(
             Exception, lambda: assess.subset_using_previous_if_missing(source, times))
 
+    def test_idempotent(self):
+        source = util.SparseTimeSeries({1: 'one', 3: 'three'})
+        times = [1, 2, 3, 4]
+        once = assess.subset_using_previous_if_missing(source, times)
+        twice = assess.subset_using_previous_if_missing(once, times)
+        self.assertEqual(list(once.sorted_items()), list(twice.sorted_items()))
+
 
 class TestIOU(unittest.TestCase):
 

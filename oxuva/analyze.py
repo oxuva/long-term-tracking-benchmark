@@ -107,28 +107,23 @@ def main():
             ignore_existing=args.ignore_cache,
             verbose=args.verbose)
 
-    # Each element assessment[tracker][iou] is a VideoObjectDict
+    # Each element assessments[tracker][iou] is a VideoObjectDict
     # of TimeSeries of frame assessment dicts.
     # TODO: Is it unsafe to use float (iou) as dictionary key?
-    assessment = {tracker: {iou: util.VideoObjectDict({
+    assessments = {tracker: {iou: {
         key: assess.assess_sequence(tasks[key].labels, predictions[tracker][key], iou)
-        for key in tasks}) for iou in args.iou_thresholds} for tracker in trackers}
-    # Each element quality[tracker][iou] is a VideoObjectDict of sequence summary dicts.
-    quality = {tracker: {iou: util.VideoObjectDict(
-        _map_dict(assess.summarize_sequence, assessment[tracker][iou]))
-        for iou in args.iou_thresholds} for tracker in trackers}
+        for key in tasks} for iou in args.iou_thresholds} for tracker in trackers}
 
     if args.subcommand == 'table':
-        _print_statistics(quality, tracker_names)
+        _print_statistics(assessments, trackers, tracker_names)
     elif args.subcommand == 'plot':
         for iou in args.iou_thresholds:
-            _plot_statistics(assessment, quality, trackers, iou,
+            _plot_statistics(assessments, trackers, iou,
                              tracker_names, tracker_colors, tracker_markers)
     elif args.subcommand == 'interval_plot':
         for iou in args.iou_thresholds:
-            _plot_intervals(
-                tasks, assessment, trackers, iou,
-                tracker_names, tracker_colors, tracker_markers)
+            _plot_intervals(assessments, tasks, trackers, iou,
+                            tracker_names, tracker_colors, tracker_markers)
 
 
 def _load_tracker_names():
@@ -153,7 +148,7 @@ def _load_tasks(fname):
             tracks = io.load_annotations_csv(fp)
         else:
             raise ValueError('unknown extension: {}'.format(fname))
-    return util.VideoObjectDict(_map_dict(util.make_task_from_track, tracks))
+    return util.map_dict(util.make_task_from_track, tracks)
 
 
 def _load_predictions_and_select_frames(tasks, tracker_pred_dir, log_prefix=''):
@@ -189,8 +184,10 @@ def _load_predictions_and_select_frames(tasks, tracker_pred_dir, log_prefix=''):
     return preds
 
 
-def _print_statistics(quality, names=None):
+def _print_statistics(assessments, trackers, names=None):
     names = names or {}
+    stats = {tracker: {iou: _dataset_quality(assessments[tracker][iou])
+                       for iou in args.iou_thresholds} for tracker in trackers}
     table_dir = os.path.join('analysis', args.data, args.challenge)
     _ensure_dir_exists(table_dir)
     table_file = os.path.join(table_dir, 'table.txt')
@@ -200,27 +197,23 @@ def _print_statistics(quality, names=None):
         fieldnames = (['tracker', 'tnr'] +
                       ['tpr_{}'.format(iou) for iou in args.iou_thresholds])
         print(','.join(fieldnames), file=f)
-        for tracker in sorted(quality.keys()):
-            tprs = []
-            stats = {
-                iou: assess.statistics(quality[tracker][iou].values())
-                for iou in args.iou_thresholds}
+        for tracker in trackers:
             first_iou = args.iou_thresholds[0]
             row = ([names.get(tracker, tracker),
-                    '{:.6g}'.format(stats[first_iou]['TNR'])] +
-                   ['{:.6g}'.format(stats[iou]['TPR']) for iou in args.iou_thresholds])
+                    '{:.6g}'.format(stats[tracker][first_iou]['TNR'])] +
+                   ['{:.6g}'.format(stats[tracker][iou]['TPR']) for iou in args.iou_thresholds])
             print(','.join(row), file=f)
 
 
-def _plot_statistics(assessments, quality, trackers, iou_threshold,
+def _plot_statistics(assessments, trackers, iou_threshold,
+                     min_time=None, max_time=None,
                      names=None, colors=None, markers=None):
     names = names or {}
     colors = colors or {}
     markers = markers or {}
 
-    stats = {tracker: assess.statistics(quality[tracker][iou_threshold].values())
+    stats = {tracker: _dataset_quality(assessments[tracker][iou_threshold])
              for tracker in trackers}
-    trackers = sorted(trackers, key=lambda t: _stats_sort_key(stats[t]), reverse=True)
 
     plt.figure(figsize=(args.width_inches, args.height_inches))
     plt.xlabel('True Negative Rate (Absent)')
@@ -270,7 +263,7 @@ def _plot_posthoc_curve(assessments, **kwargs):
              [point['TPR'] for point in metrics], **kwargs)
 
 
-def _plot_intervals(tasks, assessment, trackers, iou_threshold,
+def _plot_intervals(assessments, tasks, trackers, iou_threshold,
                     names=None, colors=None, markers=None):
     names = names or {}
     colors = colors or {}
@@ -278,29 +271,24 @@ def _plot_intervals(tasks, assessment, trackers, iou_threshold,
     times_sec = range(0, args.max_time + 1, args.time_step)
 
     # Get overall stats for order in legend.
-    quality = {
-        tracker: _map_dict(assess.summarize_sequence, assessment[tracker][iou_threshold])
-        for tracker in trackers}
-    stats = {
-        tracker: assess.statistics(quality[tracker].values())
-        for tracker in trackers}
-    trackers = sorted(trackers, key=lambda t: _stats_sort_key(stats[t]), reverse=True)
+    overall_stats = {tracker: _dataset_quality(assessments[tracker][iou_threshold])
+                     for tracker in trackers}
+    trackers = sorted(trackers, key=lambda t: _stats_sort_key(overall_stats[t]), reverse=True)
 
     intervals = {}
     points = {}
     for mode in INTERVAL_TYPES:
         intervals[mode], points[mode] = _make_intervals(times_sec, mode)
-    stats = {mode: {tracker: _interval_stats(
-        tasks, assessment[tracker][iou_threshold], intervals[mode])
-        for tracker in trackers} for mode in INTERVAL_TYPES}
-    tpr = {mode: {tracker: [
-        s.get('TPR', None) for s in stats[mode][tracker]]
-        for tracker in trackers} for mode in INTERVAL_TYPES}
 
+    stats = {mode: {tracker: [
+        _dataset_quality_interval(assessments[tracker][iou_threshold], tasks, min_time, max_time)
+        for min_time, max_time in intervals[mode]] for tracker in trackers} for mode in INTERVAL_TYPES}
+    # Get TPR for all intervals.
+    tpr = {mode: {tracker: [s.get('TPR', None) for s in stats[mode][tracker]]
+                  for tracker in trackers} for mode in INTERVAL_TYPES}
     # Find maximum TPR value over all plots (to have same axes).
-    max_tpr = {mode: max(
-        val for tracker in trackers for val in tpr[mode][tracker] if val is not None)
-        for mode in INTERVAL_TYPES}
+    max_tpr = {mode: max(val for tracker in trackers for val in tpr[mode][tracker] if val is not None)
+               for mode in INTERVAL_TYPES}
 
     for mode in INTERVAL_TYPES:
         plt.figure(figsize=(args.width_inches, args.height_inches))
@@ -352,38 +340,40 @@ def _make_intervals(values, interval_type):
     return intervals, points
 
 
-def _interval_stats(tasks, assessment, intervals):
-    '''Computes the quality statistics for each interval.
+def _dataset_quality(assessments):
+    '''Computes the overall quality of predictions on a dataset.
 
     Args:
-        tasks -- VideoObjectDict of Tasks.
-            This is required to get the initial frame number of each track.
-        assessment -- VideoObjectDict of SparseTimeSeries of frame assessment dicts.
-        intervals -- List of tuples [(a, b), ...]
+        assessments -- VideoObjectDict of SparseTimeSeries of frame assessments dicts.
 
     Returns:
         List that contains statistics for each interval.
     '''
-    stats = [None for _ in intervals]
-    for interval_index, (a_sec, b_sec) in enumerate(intervals):
-        quality = util.VideoObjectDict()
-        for vid_obj in tasks:
-            t0 = tasks[vid_obj].init_time  # in number of frames
-            subseq = _select_interval(
-                assessment[vid_obj],
-                t0 + FRAME_RATE * a_sec,
-                t0 + FRAME_RATE * b_sec)
-            quality[vid_obj] = assess.summarize_sequence(subseq)
-        stats[interval_index] = assess.statistics(quality.values())
-    return stats
+    # TODO: Clean up these names?
+    sequence_assessments = {
+        vid_obj: assess.assessment_sum(assessments[vid_obj].values())
+        for vid_obj in assessments}
+    dataset_assessment = assess.assessment_sum(sequence_assessments.values())
+    return assess.quality_metrics(dataset_assessment)
 
 
-def _select_interval(frames, a, b):
-    return util.SparseTimeSeries({t: x for t, x in frames.sorted_items() if a <= t <= b})
+def _dataset_quality_interval(assessments, tasks, min_time_seconds, max_time_seconds):
+    '''Computes the overall quality of predictions on a dataset.
 
+    Args:
+        tasks -- VideoObjectDict of Tasks.
+            This is required to get the initial frame number of each track.
 
-def _map_dict(f, x):
-    return {k: f(v) for k, v in x.items()}
+    Returns:
+        List that contains statistics for each interval.
+    '''
+    min_time = FRAME_RATE * min_time_seconds
+    max_time = FRAME_RATE * max_time_seconds
+    assessments = {
+        vid_obj: util.select_interval(assessments[vid_obj], min_time, max_time,
+                                      init_time=tasks[vid_obj].init_time)
+        for vid_obj in assessments}
+    return _dataset_quality(assessments)
 
 
 def _ensure_dir_exists(dir):

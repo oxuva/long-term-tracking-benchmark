@@ -104,8 +104,8 @@ class SparseTimeSeries(object):
     def setdefault(self, t, default):
         return self._frames.setdefault(t, default)
 
-    # def keys(self):
-    #     return self._frames.keys()
+    def keys(self):
+        return self._frames.keys()
 
     def sorted_keys(self):
         '''Returns times in sequential order.'''
@@ -119,8 +119,8 @@ class SparseTimeSeries(object):
         times = sorted(self._frames.keys())
         return zip(times, [self._frames[t] for t in times])
 
-    # def items(self):
-    #     return self._frames.items()
+    def items(self):
+        return self._frames.items()
 
     def __iter__(self):
         for t in sorted(self._frames.keys()):
@@ -128,6 +128,13 @@ class SparseTimeSeries(object):
 
     def __contains__(self, t):
         return t in self._frames
+
+
+def select_interval(series, min_time=None, max_time=None, init_time=0):
+    return SparseTimeSeries({
+        t: x for t, x in series.items()
+        if ((min_time is None or min_time <= t - init_time) and
+            (max_time is None or t - init_time <= max_time))})
 
 
 class Task(object):
@@ -237,3 +244,29 @@ class VideoObjectDict(object):
         for vid, vid_elems in elems.items():
             for obj, elem in vid_elems.items():
                 self._elems[(vid, obj)] = elem
+
+
+def dict_sum(xs, initializer=None):
+    if initializer is None:
+        total = {}
+    else:
+        total = dict(initializer)
+    for x in xs:
+        for k, v in x.items():
+            if k in total:
+                total[k] += v
+            else:
+                total[k] = v
+    return total
+
+
+def dict_sum_strict(xs, initializer):
+    total = dict(initializer)
+    for x in xs:
+        for k in initializer.keys():
+            total[k] += x[k]
+    return total
+
+
+def map_dict(f, x):
+    return {k: f(v) for k, v in x.items()}
