@@ -57,26 +57,21 @@ def _add_arguments(parser):
     tpr_tnr_args.add_argument('--no_lower_bounds', dest='lower_bounds', action='store_false')
 
     subparsers = parser.add_subparsers(dest='subcommand', help='Analysis mode')
-
     # table: Produce a table (one column per IOU threshold)
     subparser = subparsers.add_parser('table', formatter_class=ARGS_FORMATTER, parents=[common])
-
     # plot_tpr_tnr: Produce a figure (one figure per IOU threshold)
     subparser = subparsers.add_parser('plot_tpr_tnr', formatter_class=ARGS_FORMATTER,
                                       parents=[common, plot_args, tpr_tnr_args])
-
     # plot_tpr_tnr_intervals: Produce a figure (one figure per IOU threshold)
     subparser = subparsers.add_parser('plot_tpr_tnr_intervals', formatter_class=ARGS_FORMATTER,
                                       parents=[common, plot_args, tpr_tnr_args])
     subparser.add_argument('--times', type=int, default=[0, 60, 120, 240], help='seconds')
-
     # plot_tpr_time: Produce a figure for interval ranges (0, t) and (t, inf).
     subparser = subparsers.add_parser('plot_tpr_time', formatter_class=ARGS_FORMATTER,
                                       parents=[common, plot_args])
     subparser.add_argument('--max_time', type=int, default=600, help='seconds')
     subparser.add_argument('--time_step', type=int, default=60, help='seconds')
     subparser.add_argument('--no_same_axes', dest='same_axes', action='store_false')
-
     # plot_present_absent: Produce a figure (one figure per IOU threshold)
     subparser = subparsers.add_parser('plot_present_absent', formatter_class=ARGS_FORMATTER,
                                       parents=[common, plot_args])
@@ -138,7 +133,7 @@ def main():
     elif args.subcommand == 'plot_present_absent':
         for iou in args.iou_thresholds:
             _plot_present_absent(assessments, tasks, trackers, iou,
-                                    tracker_names, tracker_colors, tracker_markers)
+                                 tracker_names, tracker_colors, tracker_markers)
 
 
 def _load_tracker_names():
