@@ -230,6 +230,10 @@ def _plot_tpr_tnr_intervals(assessments, tasks, trackers,
         intervals[mode], _ = _make_intervals(args.times, mode)
 
     for iou in args.iou_thresholds:
+        # Order by performance on all frames.
+        stats = {tracker: _dataset_quality(assessments[tracker][iou]) for tracker in trackers}
+        order = sorted(trackers, key=lambda t: _stats_sort_key(stats[t]), reverse=True)
+
         # Get stats for all plots to establish axis range.
         # Note: This means that _dataset_quality_interval() is called twice.
         max_tpr = max([max([max([
@@ -242,13 +246,14 @@ def _plot_tpr_tnr_intervals(assessments, tasks, trackers,
                     _float2str_latex(iou), _float2str_latex(min_time), _float2str_latex(max_time))
                 _plot_tpr_tnr(base_name, assessments, tasks, trackers, iou,
                               min_time=min_time, max_time=max_time,
-                              max_tpr=max_tpr, enable_posthoc=False,
+                              max_tpr=max_tpr, order=order, enable_posthoc=False,
                               names=names, colors=colors, markers=markers,
                               legend_kwargs=dict(loc='upper right'))
 
 
 def _plot_tpr_tnr(base_name, assessments, tasks, trackers, iou_threshold,
-                  min_time=None, max_time=None, max_tpr=None, enable_posthoc=True,
+                  min_time=None, max_time=None,
+                  max_tpr=None, order=None, enable_posthoc=True,
                   names=None, colors=None, markers=None, legend_kwargs=None):
     names = names or {}
     colors = colors or {}
@@ -259,13 +264,15 @@ def _plot_tpr_tnr(base_name, assessments, tasks, trackers, iou_threshold,
         stats = {tracker: _dataset_quality_interval(
             assessments[tracker][iou_threshold], tasks, min_time, max_time)
             for tracker in trackers}
+        if order is None:
+            order = sorted(trackers, key=lambda t: _stats_sort_key(stats[t]), reverse=True)
 
         plt.figure(figsize=(args.width_inches, args.height_inches))
         plt.xlabel('True Negative Rate (Absent)')
         plt.ylabel('True Positive Rate (Present)')
         if args.level_sets:
             _plot_level_sets()
-        for tracker in trackers:
+        for tracker in order:
             plt.plot(
                 [stats[tracker]['TNR']], [stats[tracker]['TPR']],
                 label=names.get(tracker, tracker),
@@ -318,7 +325,7 @@ def _plot_intervals(assessments, tasks, trackers, iou_threshold,
     # Get overall stats for order in legend.
     overall_stats = {tracker: _dataset_quality(assessments[tracker][iou_threshold])
                      for tracker in trackers}
-    trackers = sorted(trackers, key=lambda t: _stats_sort_key(overall_stats[t]), reverse=True)
+    order = sorted(trackers, key=lambda t: _stats_sort_key(overall_stats[t]), reverse=True)
 
     intervals = {}
     points = {}
@@ -339,7 +346,7 @@ def _plot_intervals(assessments, tasks, trackers, iou_threshold,
         plt.figure(figsize=(args.width_inches, args.height_inches))
         plt.xlabel(INTERVAL_AXIS_LABEL[mode])
         plt.ylabel('True Positive Rate')
-        for tracker in trackers:
+        for tracker in order:
             plt.plot(1 / 60.0 * np.asfarray(points[mode]), tpr[mode][tracker],
                      label=names.get(tracker, tracker),
                      marker=markers.get(tracker, None),
