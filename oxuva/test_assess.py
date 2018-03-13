@@ -4,6 +4,7 @@ from __future__ import print_function
 
 import unittest
 
+import math
 import numpy as np
 
 from oxuva import assess
@@ -63,6 +64,25 @@ class TestIOU(unittest.TestCase):
         q = {'xmin': 0.4, 'xmax': 0.8, 'ymin': 0.6, 'ymax': 0.8}
         iou = assess.iou(p, q)
         np.testing.assert_almost_equal(iou, 0.0)
+
+
+class TestMaxGeometricMeanLineSeg(unittest.TestCase):
+
+    def test_simple(self):
+        x1, y1 = 0, 1
+        x2, y2 = 1, 0
+        got = assess.max_geometric_mean_line(x1, y1, x2, y2)
+        want = 0.5
+        np.testing.assert_almost_equal(got, want)
+
+    def test_bound(self):
+        x1, y1 = 0.3, 0.9
+        x2, y2 = 0.7, 0.4
+        max_val = assess.max_geometric_mean_line(x1, y1, x2, y2)
+        self.assertLessEqual(util.geometric_mean(x1, y1), max_val)
+        self.assertLessEqual(util.geometric_mean(x2, y2), max_val)
+        xm, ym = 0.5 * (x1 + x2), 0.5 * (y1 + y2)
+        self.assertLessEqual(util.geometric_mean(xm, ym), max_val)
 
 
 class TestPosthocThreshold(unittest.TestCase):

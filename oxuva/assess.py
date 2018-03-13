@@ -50,6 +50,8 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import math
+
 from oxuva import util
 
 
@@ -73,6 +75,7 @@ def quality_metrics(assessment):
     # TODO: Add some errorbars?
     if num_pos > 0 and num_neg > 0:
         metrics['GM'] = util.geometric_mean(metrics['TPR'], metrics['TNR'])
+        metrics['MaxGM'] = max_geometric_mean_line(metrics['TNR'], metrics['TPR'], 1, 0)
     # Include the raw totals.
     metrics.update(assessment)
     return metrics
@@ -234,3 +237,26 @@ def posthoc_threshold(assessments):
             total['TN'] -= assessment['FP']
         points.append(dict(total))
     return points
+
+
+def max_geometric_mean_line(x1, y1, x2, y2):
+    # Obtained using Matlab symbolic toolbox.
+    # >> syms x1 x2 y1 y2 th
+    # >> x = (1-th)*x1 + th*x2
+    # >> y = (1-th)*y1 + th*y2
+    # >> f = x * y
+    # >> coeffs(f, th)
+    # [ x1*y1, - y1*(x1 - x2) - x1*(y1 - y2), (x1 - x2)*(y1 - y2)]
+    a = (x1 - x2) * (y1 - y2)
+    b = - y1 * (x1 - x2) - x1 * (y1 - y2)
+    # Maximize the quadratic on [0, 1].
+    # Check endpoints.
+    candidates = [0.0, 1.0]
+    if a < 0:
+        # Concave quadratic. Check if peak is in bounds.
+        th_star = -b / (2 * a)
+        if 0 <= th_star <= 1:
+            candidates.append(th_star)
+    g = lambda x, y: math.sqrt(x * y)
+    h = lambda th: g((1-th)*x1 + th*x2, (1-th)*y1 + th*y2)
+    return max([h(th) for th in candidates])

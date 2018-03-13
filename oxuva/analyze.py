@@ -234,7 +234,7 @@ def _plot_tpr_tnr_overall(assessments, tasks, trackers,
         _plot_tpr_tnr('tpr_tnr_iou_{}'.format(_float2str_latex(iou)),
                       assessments, tasks, trackers, iou,
                       names=names, colors=colors, markers=markers,
-                      min_time=None, max_time=None,
+                      min_time=None, max_time=None, include_score=True,
                       legend_kwargs=dict(loc='lower left', bbox_to_anchor=(0.05, 0)))
 
 
@@ -268,7 +268,7 @@ def _plot_tpr_tnr_intervals(assessments, tasks, trackers,
 
 
 def _plot_tpr_tnr(base_name, assessments, tasks, trackers, iou_threshold,
-                  min_time=None, max_time=None,
+                  min_time=None, max_time=None, include_score=False,
                   max_tpr=None, order=None, enable_posthoc=True,
                   names=None, colors=None, markers=None, legend_kwargs=None):
     names = names or {}
@@ -291,7 +291,7 @@ def _plot_tpr_tnr(base_name, assessments, tasks, trackers, iou_threshold,
         for tracker in order:
             plt.plot(
                 [stats[tracker]['TNR']], [stats[tracker]['TPR']],
-                label=names.get(tracker, tracker),
+                label=_tracker_label(names.get(tracker, tracker), include_score, stats[tracker]),
                 color=colors.get(tracker, None),
                 marker=markers.get(tracker, None),
                 markerfacecolor='none', markeredgewidth=2, clip_on=False)
@@ -532,7 +532,15 @@ def _ceil_nearest(x, step):
 
 
 def _stats_sort_key(stats):
-    return (stats['GM'], stats['TPR'], stats['TNR'])
+    return (stats['MaxGM'], stats['TPR'], stats['TNR'])
+
+
+def _tracker_label(name, include_score, stats):
+    if not include_score:
+        return name
+    max_at_point = abs(stats['GM'] - stats['MaxGM']) <= 1e-3
+    asterisk = '*' if max_at_point else ''
+    return '{} ({:.2f}{})'.format(name, stats['MaxGM'], asterisk)
 
 
 def _float2str_latex(x):
