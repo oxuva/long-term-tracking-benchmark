@@ -208,6 +208,7 @@ def _load_predictions_and_select_frames(tasks, tracker_pred_dir, log_prefix=''):
 
 
 def _print_statistics(assessments, trackers, names=None):
+    METRICS = ['TPR', 'TNR', 'GM', 'MaxGM']
     names = names or {}
     stats = {tracker: {iou: _dataset_quality(assessments[tracker][iou])
                        for iou in args.iou_thresholds} for tracker in trackers}
@@ -217,14 +218,13 @@ def _print_statistics(assessments, trackers, names=None):
     if args.verbose:
         print('write table to {}'.format(table_file), file=sys.stderr)
     with open(table_file, 'w') as f:
-        fieldnames = (['tracker', 'tnr'] +
-                      ['tpr_{}'.format(iou) for iou in args.iou_thresholds])
+        fieldnames = ['tracker'] + [
+            metric + '_' + str(iou) for iou in args.iou_thresholds for metric in METRICS]
         print(','.join(fieldnames), file=f)
         for tracker in trackers:
-            first_iou = args.iou_thresholds[0]
-            row = ([names.get(tracker, tracker),
-                    '{:.6g}'.format(stats[tracker][first_iou]['TNR'])] +
-                   ['{:.6g}'.format(stats[tracker][iou]['TPR']) for iou in args.iou_thresholds])
+            row = [names.get(tracker, tracker)] + [
+                '{:.6g}'.format(stats[tracker][iou][metric])
+                for iou in args.iou_thresholds for metric in METRICS]
             print(','.join(row), file=f)
 
 
