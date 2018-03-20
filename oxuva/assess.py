@@ -258,5 +258,5 @@ def max_geometric_mean_line(x1, y1, x2, y2):
         if 0 <= th_star <= 1:
             candidates.append(th_star)
     g = lambda x, y: math.sqrt(x * y)
-    h = lambda th: g((1-th)*x1 + th*x2, (1-th)*y1 + th*y2)
+    h = lambda th: g((1 - th) * x1 + th * x2, (1 - th) * y1 + th * y2)
     return max([h(th) for th in candidates])

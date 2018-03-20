@@ -1,7 +1,8 @@
 *.pyc
 docs/email_form.html
-workspace/annotations/test.csv
-workspace/predictions/
+dataset/images/
+dataset/annotations/test.csv
+predictions/
 workspace/analysis/
 workspace/cache/
 *.swp

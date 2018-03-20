@@ -4,8 +4,9 @@ from __future__ import print_function
 
 import csv
 
+import oxuva.annot
+import oxuva.dataset
 from oxuva import util
-from oxuva import data
 
 
 TRACK_FIELDS = [
@@ -26,7 +27,7 @@ def load_annotations_csv(fp):
         obj_id = row['object_id']
         rows_by_track.setdefault((vid_id, obj_id), []).append(row)
 
-    tracks = util.VideoObjectDict()
+    tracks = oxuva.dataset.VideoObjectDict()
     for vid_obj in rows_by_track.keys():
         # vid_id, obj_id = vid_obj
         frames = util.SparseTimeSeries()
@@ -34,7 +35,7 @@ def load_annotations_csv(fp):
             present = _parse_is_present(row['object_presence'])
             # TODO: Support 'exemplar' field in CSV format?
             t = int(row['frame_num'])
-            annot = data.make_frame_label(
+            annot = oxuva.annot.make_frame_label(
                 present=present,
                 xmin=float(row['xmin']) if present else None,
                 xmax=float(row['xmax']) if present else None,
@@ -43,7 +44,7 @@ def load_annotations_csv(fp):
             frames[t] = annot
         assert len(frames) >= 2
         first_row = rows_by_track[vid_obj][0]
-        tracks[vid_obj] = data.make_track_label(
+        tracks[vid_obj] = oxuva.annot.make_track_label(
             category=first_row['class_name'],
             frames=frames,
             contains_cuts=first_row['contains_cuts'],

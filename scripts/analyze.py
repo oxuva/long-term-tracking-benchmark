@@ -14,19 +14,17 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-from oxuva import assess
-from oxuva import io
-from oxuva import util
+import oxuva
+
+# <REPO_DIR>/scripts/analyze.py
+REPO_DIR = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 
 FRAME_RATE = 30
-
 MARKERS = ['o', 'v', '^', '<', '>', 's', 'd']  # '*'
 CMAP_PREFERENCE = ['tab10', 'tab20', 'hsv']
 GRID_COLOR = '0.85'  # plt.rcParams['grid.color']
 CLEARANCE = 1.1  # Axis range is CLEARANCE * max_value, rounded up.
-
 ARGS_FORMATTER = argparse.ArgumentDefaultsHelpFormatter  # Show default values
-
 INTERVAL_TYPES = ['before', 'after', 'between']
 INTERVAL_AXIS_LABEL = {
     'before': 'Frames before time (min)',
@@ -84,8 +82,9 @@ def main():
     args = parser.parse_args()
 
     dataset_names = _get_datasets(args.data)
-    dataset_tasks = {dataset: _load_tasks(os.path.join('annotations', dataset + '.csv'))
-                     for dataset in dataset_names}
+    dataset_tasks = {
+        dataset: _load_tasks(os.path.join(REPO_DIR, 'dataset', 'annotations', dataset + '.csv'))
+        for dataset in dataset_names}
     # Take union of all datasets.
     tasks = {key: task for dataset in dataset_names
              for key, task in dataset_tasks[dataset].items()}
@@ -105,11 +104,11 @@ def main():
         for tracker_ind, tracker in enumerate(trackers):
             log_context = 'tracker {}/{} {}'.format(tracker_ind + 1, len(trackers), tracker)
             cache_file = os.path.join(dataset, 'predictions', '{}.pickle'.format(tracker))
-            predictions.setdefault(tracker, {}).update(util.cache_pickle(
+            predictions.setdefault(tracker, {}).update(oxuva.cache_pickle(
                 os.path.join(args.cache_dir, 'analyze', cache_file),
                 lambda: _load_predictions_and_select_frames(
                     dataset_tasks[dataset],
-                    os.path.join('predictions', dataset, tracker),
+                    os.path.join(REPO_DIR, 'predictions', dataset, tracker),
                     log_prefix=log_context + ': '),
                 ignore_existing=args.ignore_cache,
                 verbose=args.verbose))
@@ -118,7 +117,7 @@ def main():
     # of TimeSeries of frame assessment dicts.
     # TODO: Is it unsafe to use float (iou) as dictionary key?
     assessments = {tracker: {iou: {
-        track: assess.assess_sequence(tasks[track].labels, predictions[tracker][track], iou)
+        track: oxuva.assess_sequence(tasks[track].labels, predictions[tracker][track], iou)
         for track in tasks} for iou in args.iou_thresholds} for tracker in trackers}
 
     if args.subcommand == 'table':
@@ -168,10 +167,10 @@ def _load_tasks(fname):
         # if fname.endswith('.json'):
         #     tracks = json.load(fp)
         if fname.endswith('.csv'):
-            tracks = io.load_annotations_csv(fp)
+            tracks = oxuva.load_annotations_csv(fp)
         else:
             raise ValueError('unknown extension: {}'.format(fname))
-    return util.map_dict(util.make_task_from_track, tracks)
+    return oxuva.map_dict(oxuva.make_task_from_track, tracks)
 
 
 def _load_predictions_and_select_frames(tasks, tracker_pred_dir, log_prefix=''):
@@ -184,7 +183,7 @@ def _load_predictions_and_select_frames(tasks, tracker_pred_dir, log_prefix=''):
     Returns:
         VideoObjectDict of SparseTimeSeries of frame assessments.
     '''
-    preds = util.VideoObjectDict()
+    preds = oxuva.VideoObjectDict()
     for track_num, vid_obj in enumerate(tasks.keys()):
         vid, obj = vid_obj
         task = tasks[vid_obj]
@@ -196,13 +195,13 @@ def _load_predictions_and_select_frames(tasks, tracker_pred_dir, log_prefix=''):
         pred_file = os.path.join(tracker_pred_dir, '{}.csv'.format(track_name))
         try:
             with open(pred_file, 'r') as fp:
-                pred = io.load_predictions_csv(fp)
+                pred = oxuva.load_predictions_csv(fp)
         except IOError, exc:
             if args.permissive:
                 print('warning: exclude track {}: {}'.format(track_name, str(exc)), file=sys.stderr)
             else:
                 raise
-        pred = assess.subset_using_previous_if_missing(pred, task.labels.sorted_keys())
+        pred = oxuva.subset_using_previous_if_missing(pred, task.labels.sorted_keys())
         preds[vid_obj] = pred
     return preds
 
@@ -325,8 +324,8 @@ def _plot_tpr_tnr(base_name, assessments, tasks, trackers, iou_threshold,
 
 def _plot_posthoc_curve(assessments, **kwargs):
     frames = list(itertools.chain(*[series.values() for series in assessments.values()]))
-    operating_points = assess.posthoc_threshold(frames)
-    metrics = map(assess.quality_metrics, operating_points)
+    operating_points = oxuva.posthoc_threshold(frames)
+    metrics = map(oxuva.quality_metrics, operating_points)
     plt.plot([point['TNR'] for point in metrics],
              [point['TPR'] for point in metrics], **kwargs)
 
@@ -473,10 +472,10 @@ def _dataset_quality(assessments):
     '''
     # TODO: Clean up these names?
     sequence_assessments = {
-        vid_obj: assess.assessment_sum(assessments[vid_obj].values())
+        vid_obj: oxuva.assessment_sum(assessments[vid_obj].values())
         for vid_obj in assessments}
-    dataset_assessment = assess.assessment_sum(sequence_assessments.values())
-    return assess.quality_metrics(dataset_assessment)
+    dataset_assessment = oxuva.assessment_sum(sequence_assessments.values())
+    return oxuva.quality_metrics(dataset_assessment)
 
 
 def _dataset_quality_interval(assessments, tasks, min_time_seconds, max_time_seconds):
@@ -492,8 +491,8 @@ def _dataset_quality_interval(assessments, tasks, min_time_seconds, max_time_sec
     min_time = None if min_time_seconds is None else FRAME_RATE * min_time_seconds
     max_time = None if max_time_seconds is None else FRAME_RATE * max_time_seconds
     assessments = {
-        vid_obj: util.select_interval(assessments[vid_obj], min_time, max_time,
-                                      init_time=tasks[vid_obj].init_time)
+        vid_obj: oxuva.select_interval(assessments[vid_obj], min_time, max_time,
+                                       init_time=tasks[vid_obj].init_time)
         for vid_obj in assessments}
     return _dataset_quality(assessments)
 
