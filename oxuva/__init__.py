@@ -7,5 +7,6 @@ from oxuva.assess import *
 from oxuva.dataset import *
 from oxuva.io_annot import *
 from oxuva.io_pred import *
+from oxuva.pred import *
 from oxuva.task import *
 from oxuva.util import *
