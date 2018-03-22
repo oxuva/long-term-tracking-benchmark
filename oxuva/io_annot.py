@@ -12,8 +12,8 @@ from oxuva import util
 
 TRACK_FIELDS = [
     'video_id', 'object_id',
-    'frame_num', 'object_presence', 'xmin', 'xmax', 'ymin', 'ymax',
     'class_id', 'class_name', 'contains_cuts', 'always_visible',
+    'frame_num', 'object_presence', 'xmin', 'xmax', 'ymin', 'ymax',
 ]
 
 
