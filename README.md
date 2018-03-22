@@ -122,7 +122,7 @@ You can provide optional extra arguments:
 bash analyze_all.sh -v
 ```
 
-**Beware:** If you update the predictions, it may be necessary to wipe the `workspace/cache/analyze/` directory.
+**Beware:** If you update the predictions, it may be necessary to wipe the `workspace/cache/analyze/` directory, or simply use the `--ignore_cache` flag.
 
 ## How to add your own tracker to the evaluation
 
