@@ -1,8 +1,9 @@
 *.pyc
 docs/email_form.html
+*.tar
+*.tgz
 dataset/images/
 dataset/annotations/test.csv
-predictions/
 workspace/analysis/
 workspace/cache/
 *.swp

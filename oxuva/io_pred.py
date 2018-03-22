@@ -35,7 +35,7 @@ def load_predictions_csv(fp):
     for row in reader:
         present = util.str2bool(row['present'])
         t = int(row['frame_num'])
-        predictions[t] = pred.make_prediction(
+        predictions[t] = make_prediction(
             present=present,
             score=float(row['score']),
             xmin=float(row['xmin']) if present else None,

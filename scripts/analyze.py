@@ -167,7 +167,7 @@ def _load_tasks(fname):
         # if fname.endswith('.json'):
         #     tracks = json.load(fp)
         if fname.endswith('.csv'):
-            tracks = oxuva.load_annotations_csv(fp)
+            tracks = oxuva.load_dataset_annotations_csv(fp)
         else:
             raise ValueError('unknown extension: {}'.format(fname))
     return oxuva.map_dict(oxuva.make_task_from_track, tracks)

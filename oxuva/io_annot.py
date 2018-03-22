@@ -29,7 +29,7 @@ def load_dataset_annotations_csv(fp):
         obj_id = row['object_id']
         rows_by_track.setdefault((vid_id, obj_id), []).append(row)
 
-    tracks = dataset.VideoObjectDict()
+    tracks = VideoObjectDict()
     for vid_obj in rows_by_track.keys():
         # vid_id, obj_id = vid_obj
         frames = util.SparseTimeSeries()
