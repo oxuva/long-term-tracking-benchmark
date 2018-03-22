@@ -28,9 +28,9 @@ This is required to run the scripts such as the OpenCV example tracker and the a
 ## How to run your tracker
 
 Our toolkit does not execute your tracker.
-Your tracker should output all predictions in the format described [here](TODO).
-See [`examples/opencv/track.py`](examples/opencv/track.py) for an example.
+Your tracker should output all predictions in the format described below.
 For Python trackers, we provide the utility functions `oxuva.load_dataset_tasks_csv` and `oxuva.dump_predictions_csv` to make this easy.
+See [`examples/opencv/track.py`](examples/opencv/track.py) for an example.
 
 All rectangle co-ordinates are relative to the image: zero means top and left, one means bottom and right.
 If the object extends beyond the image boundary, ground-truth rectangles are clipped to \[0, 1\].
@@ -93,7 +93,8 @@ If the object is predicted `absent`, then the score and the rectangle will not b
 
 ## How to generate the plots
 
-Obtain the up-to-date predictions of other trackers on the `dev` set from [this link](TODO).
+Obtain the up-to-date predictions of other trackers on the `dev` set from [this Google drive directory](https://drive.google.com/drive/folders/1dTZE4BrHIbLx0QiPkGLfGcqryYPKdveT).
+These files can be downloaded on the command line using [`gdrive`](https://github.com/prasmussen/gdrive).
 Extract the predictions in the repository directory.
 ```bash
 cd long-term-tracking-benchmark/
