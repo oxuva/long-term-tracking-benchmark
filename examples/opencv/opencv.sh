@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -x
+
 # Change into directory of script.
 cd "$( dirname "${BASH_SOURCE[0]}" )"
 

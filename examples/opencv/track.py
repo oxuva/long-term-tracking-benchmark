@@ -25,10 +25,13 @@ def main():
     if not os.path.exists(tracker_preds_dir):
         os.makedirs(tracker_preds_dir, 0755)
 
-    tracks_file = os.path.join(args.data_dir, 'annotations', args.data + '.csv')
-    with open(tracks_file, 'r') as fp:
-        tracks = oxuva.load_annotations_csv(fp)
-    tasks = {key: oxuva.make_task_from_track(track) for key, track in tracks.items()}
+    tasks_file = os.path.join(args.data_dir, 'tasks', args.data + '.csv')
+    with open(tasks_file, 'r') as fp:
+        tasks = oxuva.load_dataset_tasks_csv(fp)
+    # tracks_file = os.path.join(args.data_dir, 'annotations', args.data + '.csv')
+    # with open(tracks_file, 'r') as fp:
+    #     tracks = oxuva.load_annotations_csv(fp)
+    # tasks = {key: oxuva.make_task_from_track(track) for key, track in tracks.items()}
 
     imfile = lambda vid, t: os.path.join(
         args.data_dir, 'images', args.data, vid, '{:06d}.jpeg'.format(t))
