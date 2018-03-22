@@ -4,7 +4,7 @@ from __future__ import print_function
 
 import csv
 
-import oxuva.pred
+from oxuva.pred import make_prediction
 from oxuva import util
 
 
@@ -31,18 +31,18 @@ def load_predictions_csv(fp):
     # fp.seek(0)
     reader = _dict_reader_optional_fieldnames(fp, PREDICTION_FIELD_NAMES)
 
-    preds = util.SparseTimeSeries()
+    predictions = util.SparseTimeSeries()
     for row in reader:
         present = util.str2bool(row['present'])
         t = int(row['frame_num'])
-        preds[t] = oxuva.pred.make_prediction(
+        predictions[t] = pred.make_prediction(
             present=present,
             score=float(row['score']),
             xmin=float(row['xmin']) if present else None,
             xmax=float(row['xmax']) if present else None,
             ymin=float(row['ymin']) if present else None,
             ymax=float(row['ymax']) if present else None)
-    return preds
+    return predictions
 
 
 def _dict_reader_optional_fieldnames(fp, fieldnames):
@@ -72,16 +72,16 @@ def dump_predictions_csv(vid_id, obj_id, predictions, fp):
         fp: File-like object with write().
     '''
     writer = csv.DictWriter(fp, fieldnames=PREDICTION_FIELD_NAMES)
-    for t, pred in predictions.items():
+    for t, prediction in predictions.items():
         row = {
             'video': vid_id,
             'object': obj_id,
             'frame_num': t,
-            'present': util.bool2str(pred['present']),
-            'score': pred['score'],
-            'xmin': pred['xmin'],
-            'xmax': pred['xmax'],
-            'ymin': pred['ymin'],
-            'ymax': pred['ymax'],
+            'present': util.bool2str(prediction['present']),
+            'score': prediction['score'],
+            'xmin': prediction['xmin'],
+            'xmax': prediction['xmax'],
+            'ymin': prediction['ymin'],
+            'ymax': prediction['ymax'],
         }
         writer.writerow(row)

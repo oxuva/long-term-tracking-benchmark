@@ -4,19 +4,21 @@ from __future__ import print_function
 
 import csv
 
-import oxuva.annot
-import oxuva.dataset
+from oxuva.annot import make_frame_label
+from oxuva.annot import make_track_label
+from oxuva.dataset import VideoObjectDict
 from oxuva import util
 
 
 TRACK_FIELDS = [
     'video_id', 'object_id',
-    'class_id', 'class_name', 'contains_cuts', 'always_visible',
     'frame_num', 'object_presence', 'xmin', 'xmax', 'ymin', 'ymax',
+    'class_id', 'class_name', 'contains_cuts', 'always_visible',
 ]
 
 
-def load_annotations_csv(fp):
+def load_dataset_annotations_csv(fp):
+    '''Loads the annotations for an entire dataset from one CSV file.'''
     reader = csv.DictReader(fp, fieldnames=TRACK_FIELDS)
     rows = [row for row in reader]
 
@@ -27,7 +29,7 @@ def load_annotations_csv(fp):
         obj_id = row['object_id']
         rows_by_track.setdefault((vid_id, obj_id), []).append(row)
 
-    tracks = oxuva.dataset.VideoObjectDict()
+    tracks = dataset.VideoObjectDict()
     for vid_obj in rows_by_track.keys():
         # vid_id, obj_id = vid_obj
         frames = util.SparseTimeSeries()
@@ -35,16 +37,15 @@ def load_annotations_csv(fp):
             present = _parse_is_present(row['object_presence'])
             # TODO: Support 'exemplar' field in CSV format?
             t = int(row['frame_num'])
-            annot = oxuva.annot.make_frame_label(
+            frames[t] = make_frame_label(
                 present=present,
                 xmin=float(row['xmin']) if present else None,
                 xmax=float(row['xmax']) if present else None,
                 ymin=float(row['ymin']) if present else None,
                 ymax=float(row['ymax']) if present else None)
-            frames[t] = annot
         assert len(frames) >= 2
         first_row = rows_by_track[vid_obj][0]
-        tracks[vid_obj] = oxuva.annot.make_track_label(
+        tracks[vid_obj] = make_track_label(
             category=first_row['class_name'],
             frames=frames,
             contains_cuts=first_row['contains_cuts'],
@@ -53,7 +54,8 @@ def load_annotations_csv(fp):
     return tracks
 
 
-def dump_annotations_csv(tracks, fp):
+def dump_dataset_annotations_csv(tracks, fp):
+    '''Writes the annotations for an entire dataset to one CSV file.'''
     writer = csv.DictWriter(fp, fieldnames=TRACK_FIELDS)
     for vid in sorted(tracks.videos()):
         # Sort objects by their first frame.
