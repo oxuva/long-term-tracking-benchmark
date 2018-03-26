@@ -22,33 +22,21 @@ div {
   display: inline-block;
   margin-bottom: 8px;
   width: calc(50% - 4px);
-  margin-right: 8px;
+  margin-right: 0px;
   text-decoration: none;
   color: black;
-}
-
-.youtube:nth-of-type(2n) {
-  margin-right: 0;
 }
 
 @media screen and (min-width: 50em) {
   .youtube {
     width: calc(25% - 6px);
   }
-  
-  .youtube:nth-of-type(2n) {
-    margin-right: 8px;
-  }
-  
-  .youtube:nth-of-type(4n) {
-    margin-right: 0;
-  }
 }
 
 .videoWrapper {
 	position: relative;
-	padding-bottom: 56.25%; /* 16:9 */
-	padding-top: 20px;
+	padding-bottom: 54%;
+	padding-top: 20%;
 	height: 0;  
 }
 
