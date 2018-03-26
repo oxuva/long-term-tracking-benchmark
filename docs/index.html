@@ -9,7 +9,7 @@
     <meta name="description" content="OxUvA long-term-tracking benchmark page">
     <meta name="author" content="Luca Bertinetto">
 
-    <title>Long-term tracking benchmark</title>
+    <title>Long-term Tracking</title>
 
     <!-- Bootstrap core CSS -->
     <link href="./css/bootstrap.min.css" rel="stylesheet">
@@ -23,8 +23,6 @@
     <link href="./css/project_style.css" rel="stylesheet">
     <!-- Fonts -->
     <link href='https://fonts.googleapis.com/css?family=Open+Sans:300' rel='stylesheet' type='text/css'>
-    <!-- Just for debugging purposes. Don't actually copy these 2 lines! -->
-    <!--[if lt IE 9]><script src="../../assets/js/ie8-responsive-file-warning.js"></script><![endif]-->
     <script src="./js/ie-emulation-modes-warning.js"></script>
   </head>
 
@@ -34,7 +32,8 @@
         <div class="navbar-header">
         <div id="navbar" class="collapse navbar-collapse">
           <ul class="nav navbar-nav">
-            <li><a class="navbar-brand" href="https://github.com/oxuva/long-term-tracking-benchmark">Benchmark</a></li>
+<!--             <li><img src="./img/oxuva_logo.png"></li>
+ -->            <li><a class="navbar-brand" href="https://github.com/oxuva/long-term-tracking-benchmark">Benchmark</a></li>
             <li><a class="navbar-brand" href=""></a></li>
             <li><a class="navbar-brand" href=""></a></li>
             <li><a class="navbar-brand" href=""></a></li>
@@ -50,7 +49,7 @@
             <li><a class="navbar-brand" href=""></a></li>
 			<li><a class="navbar-brand" href=""></a></li>
 			<li><a class="navbar-brand" href=""></a></li>
-            <li><a class="navbar-brand" href="#">Eval. server</a></li>
+            <li><a class="navbar-brand" href="evaluation.html">Eval. server</a></li>
           </ul>          
         </div>
       </div>
@@ -60,17 +59,27 @@
     
 		<div class="container">
       <div class="row">
-        <div><h1>Long-term tracking in the wild: a benchmark</h1></div>
-				&nbsp;
-				<div><img class="img-responsive center-block" alt="pipeline picture" src="./img/teaser.jpg" style="width:100%"></p></div>
+        <div><h1>Long-term Tracking in the Wild: A Benchmark</h1></div>
+        <div>
+            <p class="lead">
+                <a href="http://jack.valmadre.net/">Jack Valmadre *</a>,&ensp;&ensp;
+                <a href="http://www.robots.ox.ac.uk//~luca">Luca Bertinetto *</a>,&ensp;&ensp;
+                <a href="http://www.robots.ox.ac.uk/~joao/">João F. Henriques</a>,&ensp;&ensp;
+                <a href="https://staff.fnwi.uva.nl/r.tao/index.html">Ran Tao</a>,</br>
+                <a href="http://www.robots.ox.ac.uk/~vedaldi/">Andrea Vedaldi</a>,&ensp;&ensp;
+                <a href="https://staff.fnwi.uva.nl/a.w.m.smeulders/">Arnold Smeulders</a>,&ensp;&ensp;
+                <a href="https://scholar.google.it/citations?user=kPxa2w0AAAAJ&hl=en&oi=ao">Philip Torr</a>,&ensp;&ensp;
+                <a href="http://www.egavves.com">Efstratios Gavves *</a>
+            </p>
+        </div>
+        <div>
+            <p class="pointers_sub" style="text-align:left"><b>*</b> means equal contribution</p>
+        </div>  
+		&nbsp;
+		<div><img class="img-responsive center-block" alt="pipeline picture" src="./img/teaser.jpg" style="width:100%"></p></div>
         &nbsp;     
         <div><p class="abstract text-left">
-        We introduce a new video benchmark to assess single-object tracking algorithms in the <b>long-term</b> scenario, where videos can last several minutes and present target object disappearance.</br>
-		Benchmarks have enabled great strides in the field of object tracking by defining standardized evaluations on large sets of diverse videos.
-		However, these works have focused exclusively on short sequences of a few tens of seconds, where the target object is always present.
-		Consequently, most researchers have designed methods tailored to this "short-term" scenario, which is poorly representative of practitioners' needs.</br>
-		Aiming to fill this gap, we curate and further annotate <a href="https://research.google.com/youtube-bb/">YouTube Bounding Boxes</a> to compile a Long-Term, Large-Scale Tracking dataset of sequences with average length greater than two minutes and with frequent target disappearance.
-		This dataset is the largest ever for single object tracking: it comprises 366 sequences for a total of 1.5 millions frames, 25 times more than the popular OTB-100.
+            We introduce a new video dataset and benchmark to assess single-object tracking algorithms. Benchmarks have enabled great strides in the field of object tracking by defining standardized evaluations on large sets of diverse videos. However, these works have focused exclusively on sequences only few tens of seconds long, and where the target object is always present. Consequently, most researchers have designed methods tailored to this "short-term" scenario, which is poorly representative of practitioners' needs. Aiming to address this disparity, we compile a long-term, large-scale tracking dataset of sequences with average length greater than two minutes and with frequent target object disappearance. This dataset is the largest ever for single object tracking: it comprises 366 sequences for a total of 14 hours of video, 26 times more than the popular OTB-100. We assess the performance of several algorithms, considering both the ability to locate the target and to determine whether it is present or absent. Our goal is to offer the community a large and diverse benchmark to enable the design and evaluation of tracking methods ready to be used "in the wild".
         </p></div>
 		&nbsp;
 		&nbsp;
