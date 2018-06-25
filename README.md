@@ -21,8 +21,9 @@ pip install -r requirements.txt
 
 You must also add the parent directory of `oxuva/` to `PYTHONPATH` to be able to import the `oxuva` package.
 ```bash
-export PYTHONPATH="/path/to/long-term-tracking-benchmark:$PYTHONPATH"
+export PYTHONPATH="/path/to/long-term-tracking-benchmark/python:$PYTHONPATH"
 ```
+This can be done using `source pythonpath.sh` in bash.
 This is required to run the scripts such as the OpenCV example tracker and the analysis script which generates the plots.
 
 ## How to run your tracker

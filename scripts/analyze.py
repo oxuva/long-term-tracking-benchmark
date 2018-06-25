@@ -196,7 +196,7 @@ def _load_predictions_and_select_frames(tasks, tracker_pred_dir, log_prefix=''):
         try:
             with open(pred_file, 'r') as fp:
                 pred = oxuva.load_predictions_csv(fp)
-        except IOError, exc:
+        except IOError as exc:
             if args.permissive:
                 print('warning: exclude track {}: {}'.format(track_name, str(exc)), file=sys.stderr)
             else:
