@@ -10,6 +10,9 @@ import math
 import os
 import sys
 
+import logging
+logger = logging.getLogger(__name__)
+
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -38,13 +41,16 @@ def _add_arguments(parser):
     common.add_argument('--data', default='dev', help='{dev,test,devtest}')
     common.add_argument('--challenge', default='constrained',
                         help='{open,constrained,all}')
-    common.add_argument('--verbose', '-v', action='store_true')
+    # common.add_argument('--verbose', '-v', action='store_true')
+    common.add_argument('--loglevel', default='info', choices=['info', 'debug', 'warning'])
     common.add_argument('--permissive', action='store_true',
                         help='Silently exclude tracks which caused an error')
     common.add_argument('--ignore_cache', action='store_true')
     common.add_argument('--cache_dir', default='cache/')
     common.add_argument('--iou_thresholds', nargs='+', type=float, default=[0.5],
                         help='List of IOU thresholds to use', metavar='IOU')
+    common.add_argument('--bootstrap_trials', type=int, default=10,
+                        help='Number of trials for bootstrap sampling')
 
     plot_args = argparse.ArgumentParser(add_help=False)
     plot_args.add_argument('--width_inches', type=float, default=5.0)
@@ -80,6 +86,7 @@ def main():
     _add_arguments(parser)
     global args
     args = parser.parse_args()
+    logging.basicConfig(level=getattr(logging, args.loglevel.upper()))
 
     dataset_names = _get_datasets(args.data)
     dataset_tasks = {
@@ -110,15 +117,16 @@ def main():
                     dataset_tasks[dataset],
                     os.path.join(REPO_DIR, 'predictions', dataset, tracker),
                     log_prefix=log_context + ': '),
-                ignore_existing=args.ignore_cache,
-                verbose=args.verbose))
+                ignore_existing=args.ignore_cache))
 
     # Each element assessments[tracker][iou] is a VideoObjectDict
     # of TimeSeries of frame assessment dicts.
     # TODO: Is it unsafe to use float (iou) as dictionary key?
-    assessments = {tracker: {iou: {
-        track: oxuva.assess_sequence(tasks[track].labels, predictions[tracker][track], iou)
-        for track in tasks} for iou in args.iou_thresholds} for tracker in trackers}
+    assessments = {tracker: {iou:
+        oxuva.VideoObjectDict({
+            track: oxuva.assess_sequence(tasks[track].labels, predictions[tracker][track], iou)
+            for track in tasks})
+        for iou in args.iou_thresholds} for tracker in trackers}
 
     if args.subcommand == 'table':
         _print_statistics(assessments, trackers, tracker_names)
@@ -190,8 +198,7 @@ def _load_predictions_and_select_frames(tasks, tracker_pred_dir, log_prefix=''):
         track_name = vid + '_' + obj
         log_context = '{}object {}/{} {}'.format(
             log_prefix, track_num + 1, len(tasks), track_name)
-        if args.verbose:
-            print(log_context, file=sys.stderr)
+        logger.info(log_context)
         pred_file = os.path.join(tracker_pred_dir, '{}.csv'.format(track_name))
         try:
             with open(pred_file, 'r') as fp:
@@ -208,22 +215,24 @@ def _load_predictions_and_select_frames(tasks, tracker_pred_dir, log_prefix=''):
 
 def _print_statistics(assessments, trackers, names=None):
     METRICS = ['TPR', 'TNR', 'GM', 'MaxGM']
+    metrics_bstrap = list(itertools.chain.from_iterable(
+        [key, key + '_mean', key + '_var'] for key in METRICS))
     names = names or {}
-    stats = {tracker: {iou: _dataset_quality(assessments[tracker][iou])
-                       for iou in args.iou_thresholds} for tracker in trackers}
+    stats = {tracker: {iou: (
+        _dataset_quality_bootstrap(assessments[tracker][iou], args.bootstrap_trials))
+        for iou in args.iou_thresholds} for tracker in trackers}
     table_dir = os.path.join('analysis', args.data, args.challenge)
     _ensure_dir_exists(table_dir)
     table_file = os.path.join(table_dir, 'table.txt')
-    if args.verbose:
-        print('write table to {}'.format(table_file), file=sys.stderr)
+    logger.info('write table to %s', table_file)
     with open(table_file, 'w') as f:
         fieldnames = ['tracker'] + [
-            metric + '_' + str(iou) for iou in args.iou_thresholds for metric in METRICS]
+            metric + '_' + str(iou) for iou in args.iou_thresholds for metric in metrics_bstrap]
         print(','.join(fieldnames), file=f)
         for tracker in trackers:
             row = [names.get(tracker, tracker)] + [
                 '{:.6g}'.format(stats[tracker][iou][metric])
-                for iou in args.iou_thresholds for metric in METRICS]
+                for iou in args.iou_thresholds for metric in metrics_bstrap]
             print(','.join(row), file=f)
 
 
@@ -246,7 +255,8 @@ def _plot_tpr_tnr_intervals(assessments, tasks, trackers,
 
     for iou in args.iou_thresholds:
         # Order by performance on all frames.
-        stats = {tracker: _dataset_quality(assessments[tracker][iou]) for tracker in trackers}
+        stats = {tracker: _dataset_quality(assessments[tracker][iou].values())
+                 for tracker in trackers}
         order = sorted(trackers, key=lambda t: _stats_sort_key(stats[t]), reverse=True)
 
         # Get stats for all plots to establish axis range.
@@ -338,7 +348,7 @@ def _plot_intervals(assessments, tasks, trackers, iou_threshold,
     times_sec = range(0, args.max_time + 1, args.time_step)
 
     # Get overall stats for order in legend.
-    overall_stats = {tracker: _dataset_quality(assessments[tracker][iou_threshold])
+    overall_stats = {tracker: _dataset_quality(assessments[tracker][iou_threshold].values())
                      for tracker in trackers}
     order = sorted(trackers, key=lambda t: _stats_sort_key(overall_stats[t]), reverse=True)
 
@@ -395,15 +405,15 @@ def _plot_present_absent(
         if not all([label['present'] for t, label in task.labels.items()])]
 
     stats_whole = {
-        tracker: _dataset_quality(assessments[tracker][iou_threshold])
+        tracker: _dataset_quality(assessments[tracker][iou_threshold].values())
         for tracker in trackers}
     stats_all_present = {
         tracker: _dataset_quality(
-            {key: assessments[tracker][iou_threshold][key] for key in subset_all_present})
+            [assessments[tracker][iou_threshold][key] for key in subset_all_present])
         for tracker in trackers}
     stats_any_absent = {
         tracker: _dataset_quality(
-            {key: assessments[tracker][iou_threshold][key] for key in subset_any_absent})
+            [assessments[tracker][iou_threshold][key] for key in subset_any_absent])
         for tracker in trackers}
 
     order = sorted(trackers, key=lambda t: _stats_sort_key(stats_whole[t]), reverse=True)
@@ -463,19 +473,83 @@ def _make_intervals(values, interval_type):
 
 def _dataset_quality(assessments):
     '''Computes the overall quality of predictions on a dataset.
+    The predictions of all tracks are pooled together.
 
     Args:
-        assessments -- VideoObjectDict of SparseTimeSeries of frame assessments dicts.
+        assessments -- Either VideoObjectDict or iterable collection of
+            SparseTimeSeries of frame assessment dicts.
 
     Returns:
         List that contains statistics for each interval.
     '''
-    # TODO: Clean up these names?
-    sequence_assessments = {
-        vid_obj: oxuva.assessment_sum(assessments[vid_obj].values())
-        for vid_obj in assessments}
-    dataset_assessment = oxuva.assessment_sum(sequence_assessments.values())
-    return oxuva.quality_metrics(dataset_assessment)
+    if isinstance(assessments, oxuva.VideoObjectDict):
+        assessments = assessments.values()
+    seq_totals = [oxuva.assessment_sum(time_series.values()) for time_series in assessments]
+    dataset_total = oxuva.assessment_sum(seq_totals)
+    return oxuva.quality_metrics(dataset_total)
+
+
+def _dataset_quality_bootstrap(assessments, num_trials, base_seed=0):
+    '''
+    Args:
+        assessments: VideoObjectDict of frame assessment dicts.
+            Bootstrap sampling is performed on videos not tracks since these are independent.
+
+    Note that `_dataset_quality_bootstrap` requires a VideoObjectDict
+    because it bootstrap-samples the videos not the tracks.
+    '''
+    trial_metrics = []
+    for i in range(num_trials):
+        trial_assessments = _bootstrap_sample_by_video(assessments, seed=(base_seed + i))
+        logger.debug('bootstrap trial %d: num sequences %d', i + 1, len(trial_assessments))
+        trial_metrics.append(_dataset_quality(trial_assessments))
+    quality = _compute_stats(trial_metrics)
+
+    # Augment with standard (deterministic) metrics.
+    quality.update(_dataset_quality(assessments))
+    return quality
+
+
+def _compute_stats(xs):
+    # Check that all dictionaries have the same keys.
+    fields = _get_keys_and_assert_equal(xs)
+    stats = {}
+    stats.update({field + '_mean': np.mean([x[field] for x in xs]) for field in fields})
+    stats.update({field + '_var': np.var([x[field] for x in xs]) for field in fields})
+    return stats
+
+
+def _get_keys_and_assert_equal(xs):
+    assert len(xs) > 0
+    fields = None
+    for x in xs:
+        curr_fields = set(x.keys())
+        if fields is None:
+            fields = curr_fields
+        else:
+            if curr_fields != fields:
+                raise ValueError('fields differ: {} and {}', fields, curr_fields)
+    return fields
+
+
+def _bootstrap_sample_by_video(tracks, seed):
+    '''
+    Usage:
+        Let `assessments` be a VideoObjectDict of TimeSeries of frame assessments.
+        Instead of:
+            quality = _dataset_quality(assessments.values())
+        One can do:
+            trial_assessments = _bootstrap_sample_by_video(assessments, seed=0)
+            quality = _dataset_quality(trial_assessments)
+    '''
+    # if not isinstance(tracks, oxuva.VideoObjectDict):
+    #     tracks = oxuva.VideoObjectDict(tracks)
+    assert isinstance(tracks, oxuva.VideoObjectDict)
+    by_video = tracks.to_nested_dict()
+    rand = np.random.RandomState(seed)
+    names = list(by_video.keys())
+    names_sample = rand.choice(names, len(by_video), replace=True)
+    return list(itertools.chain.from_iterable(by_video[name].values() for name in names_sample))
 
 
 def _dataset_quality_interval(assessments, tasks, min_time_seconds, max_time_seconds):
@@ -512,8 +586,7 @@ def _generate_colors(n):
 
 
 def _save_fig(plot_file):
-    if args.verbose:
-        print('write plot to {}'.format(plot_file), file=sys.stderr)
+    logger.info('write plot to %s', plot_file)
     plt.savefig(plot_file)
 
 

@@ -2,12 +2,16 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import collections
 import functools
 import json
 import numpy as np
 import os
 import pickle
 import sys
+
+import logging
+logger = logging.getLogger(__name__)
 
 
 def str2bool(x):
@@ -48,7 +52,7 @@ def geometric_mean(*args):
     return np.asscalar(np.exp(np.mean(np.log(args))))
 
 
-def cache(protocol, filename, func, makedir=True, ignore_existing=False, verbose=False):
+def cache(protocol, filename, func, makedir=True, ignore_existing=False):
     '''Caches the result of a function in a file.
 
     Args:
@@ -58,9 +62,8 @@ def cache(protocol, filename, func, makedir=True, ignore_existing=False, verbose
             If it existed, the old cache file will be over-written.
     '''
     if (not ignore_existing) and os.path.exists(filename):
-        if verbose:
-            print('load from cache: {}'.format(filename), file=sys.stderr)
-        with open(filename, 'r') as r:
+        logger.info('load from cache: %s', filename)
+        with open(filename, 'rb' if protocol.binary else 'r') as r:
             result = protocol.load(r)
     else:
         dir = os.path.dirname(filename)
@@ -70,14 +73,18 @@ def cache(protocol, filename, func, makedir=True, ignore_existing=False, verbose
         # Write to a temporary file and then perform atomic rename.
         # This guards against partial cache files.
         tmp = filename + '.tmp'
-        with open(tmp, 'w') as w:
+        with open(tmp, 'wb' if protocol.binary else 'w') as w:
             protocol.dump(result, w)
         os.rename(tmp, filename)
     return result
 
 
-cache_json = functools.partial(cache, json)
-cache_pickle = functools.partial(cache, pickle)
+Protocol = collections.namedtuple('Protocol', ['dump', 'load', 'binary'])
+protocol_json = Protocol(dump=json.dump, load=json.load, binary=True)
+protocol_pickle = Protocol(dump=pickle.dump, load=pickle.load, binary=False)
+
+cache_json = functools.partial(cache, protocol_json)
+cache_pickle = functools.partial(cache, protocol_pickle)
 
 
 def dict_sum(xs, initializer=None):

@@ -52,6 +52,9 @@ from __future__ import print_function
 
 import math
 
+import logging
+logger = logging.getLogger(__name__)
+
 from oxuva import util
 
 
