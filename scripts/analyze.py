@@ -268,9 +268,7 @@ def _plot_tpr_tnr_intervals(assessments, tasks, trackers,
 
     for iou in args.iou_thresholds:
         # Order by performance on all frames.
-        stats = {tracker: _dataset_quality(assessments[tracker][iou].values(),
-                                           bootstrap=args.bootstrap,
-                                           num_trials=args.bootstrap_trials)
+        stats = {tracker: _dataset_quality(assessments[tracker][iou].values(), bootstrap=False)
                  for tracker in trackers}
         order = sorted(trackers, key=lambda t: _stats_sort_key(stats[t]), reverse=True)
 
@@ -278,7 +276,7 @@ def _plot_tpr_tnr_intervals(assessments, tasks, trackers,
         # Note: This means that _dataset_quality_interval() is called twice.
         max_tpr = max([max([max([
             _dataset_quality_interval(assessments[tracker][iou], tasks, min_time, max_time,
-                                      bootstrap=args.bootstrap, num_trials=args.bootstrap_trials)['TPR']
+                                      bootstrap=False)['TPR']
             for tracker in trackers]) for min_time, max_time in intervals[mode]]) for mode in modes])
 
         for mode in modes:
@@ -310,7 +308,7 @@ def _plot_tpr_tnr(base_name, assessments, tasks, trackers, iou_threshold, bootst
             bootstrap=bootstrap, num_trials=args.bootstrap_trials)
             for tracker in trackers}
         if order is None:
-            sort_key = lambda t: _stats_sort_key(bootstrap, stats[t])
+            sort_key = lambda t: _stats_sort_key(stats[t], bootstrap=bootstrap)
             order = sorted(trackers, key=sort_key, reverse=True)
 
         plt.figure(figsize=(args.width_inches, args.height_inches))
@@ -321,10 +319,10 @@ def _plot_tpr_tnr(base_name, assessments, tasks, trackers, iou_threshold, bootst
         for tracker in order:
             if bootstrap:
                 plot_func = functools.partial(
-                    plt.errorbar,
+                    _errorbar,
                     xerr=ERRORBAR_NUM_SIGMA * np.sqrt([stats[tracker]['TNR_var']]),
                     yerr=ERRORBAR_NUM_SIGMA * np.sqrt([stats[tracker]['TPR_var']]),
-                    capsize=2)
+                    capsize=3)
             else:
                 plot_func = plt.plot
             plot_func([stats[tracker][tnr_key]], [stats[tracker][tpr_key]],
@@ -392,7 +390,7 @@ def _plot_intervals(assessments, tasks, trackers, iou_threshold,
 
     stats = {mode: {tracker: [
         _dataset_quality_interval(assessments[tracker][iou_threshold], tasks, min_time, max_time,
-                                  bootstrap=args.bootstrap, num_trials=args.bootstrap_trials)
+                                  bootstrap=False)
         for min_time, max_time in intervals[mode]] for tracker in trackers} for mode in INTERVAL_TYPES}
     # Get TPR for all intervals.
     tpr = {mode: {tracker: [s.get('TPR', None) for s in stats[mode][tracker]]
@@ -662,7 +660,7 @@ def _ceil_nearest(x, step):
     return math.ceil(x / step) * step
 
 
-def _stats_sort_key(bootstrap, stats):
+def _stats_sort_key(stats, bootstrap=False):
     if bootstrap:
         return (stats['MaxGM_mean'], stats['TPR_mean'], stats['TNR_mean'])
     else:
@@ -681,6 +679,15 @@ def _tracker_label(name, include_score, stats, bootstrap):
 
 def _float2str_latex(x):
     return str(x).replace('.', 'd')
+
+
+def _errorbar(*args, **kwargs):
+    container = plt.errorbar(*args, **kwargs)
+    # Disable clipping for caps of errorbars.
+    caplines = container[1]
+    for capline in caplines:
+        capline.set_clip_on(False)
+    return container
 
 
 if __name__ == '__main__':
