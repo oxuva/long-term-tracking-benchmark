@@ -266,28 +266,36 @@ def _plot_tpr_tnr_intervals(assessments, tasks, trackers,
     for mode in modes:
         intervals[mode], _ = _make_intervals(args.times, mode)
 
-    for iou in args.iou_thresholds:
-        # Order by performance on all frames.
-        stats = {tracker: _dataset_quality(assessments[tracker][iou].values(), bootstrap=False)
-                 for tracker in trackers}
-        order = sorted(trackers, key=lambda t: _stats_sort_key(stats[t]), reverse=True)
+    bootstrap_modes = [False, True] if args.bootstrap else [False]
+    for bootstrap in bootstrap_modes:
+        for iou in args.iou_thresholds:
+            # Order by performance on all frames.
+            stats = {tracker: _dataset_quality(assessments[tracker][iou], bootstrap=bootstrap)
+                     for tracker in trackers}
+            order = sorted(trackers,
+                           key=lambda t: _stats_sort_key(stats[t], bootstrap=bootstrap),
+                           reverse=True)
 
-        # Get stats for all plots to establish axis range.
-        # Note: This means that _dataset_quality_interval() is called twice.
-        max_tpr = max([max([max([
-            _dataset_quality_interval(assessments[tracker][iou], tasks, min_time, max_time,
-                                      bootstrap=False)['TPR']
-            for tracker in trackers]) for min_time, max_time in intervals[mode]]) for mode in modes])
+            tpr_key = 'TPR_mean' if bootstrap else 'TPR'
+            # Get stats for all plots to establish axis range.
+            # Note: This means that _dataset_quality_interval() is called twice.
+            max_tpr = max([max([max([
+                _dataset_quality_interval(assessments[tracker][iou], tasks, min_time, max_time,
+                                          bootstrap=bootstrap)[tpr_key]
+                for tracker in trackers]) for min_time, max_time in intervals[mode]]) for mode in modes])
 
-        for mode in modes:
-            for min_time, max_time in intervals[mode]:
-                base_name = 'tpr_tnr_iou_{}_interval_{}_{}'.format(
-                    _float2str_latex(iou), _float2str_latex(min_time), _float2str_latex(max_time))
-                _plot_tpr_tnr(base_name, assessments, tasks, trackers, iou,
-                              min_time=min_time, max_time=max_time,
-                              max_tpr=max_tpr, order=order, enable_posthoc=False,
-                              names=names, colors=colors, markers=markers,
-                              legend_kwargs=dict(loc='upper right'))
+            for mode in modes:
+                for min_time, max_time in intervals[mode]:
+                    base_name = '_'.join(
+                        ['tpr_tnr', 'iou_' + _float2str_latex(iou),
+                         'interval_{}_{}'.format(_float2str_latex(min_time),
+                                                 _float2str_latex(max_time))] +
+                        (['bootstrap'] if bootstrap else []))
+                    _plot_tpr_tnr(base_name, assessments, tasks, trackers, iou, bootstrap,
+                                  min_time=min_time, max_time=max_time,
+                                  max_tpr=max_tpr, order=order, enable_posthoc=False,
+                                  names=names, colors=colors, markers=markers,
+                                  legend_kwargs=dict(loc='upper right'))
 
 
 def _plot_tpr_tnr(base_name, assessments, tasks, trackers, iou_threshold, bootstrap,
@@ -377,9 +385,7 @@ def _plot_intervals(assessments, tasks, trackers, iou_threshold,
     times_sec = range(0, args.max_time + 1, args.time_step)
 
     # Get overall stats for order in legend.
-    overall_stats = {tracker: _dataset_quality(assessments[tracker][iou_threshold].values(),
-                                               bootstrap=args.bootstrap,
-                                               num_trials=args.bootstrap_trials)
+    overall_stats = {tracker: _dataset_quality(assessments[tracker][iou_threshold].values())
                      for tracker in trackers}
     order = sorted(trackers, key=lambda t: _stats_sort_key(overall_stats[t]), reverse=True)
 
