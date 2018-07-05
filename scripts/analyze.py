@@ -379,13 +379,14 @@ def _plot_posthoc_curve(assessments, **kwargs):
 
 def _plot_intervals(assessments, tasks, trackers, iou_threshold,
                     names=None, colors=None, markers=None):
+    # TODO: Add errorbars using bootstrap sampling?
     names = names or {}
     colors = colors or {}
     markers = markers or {}
     times_sec = range(0, args.max_time + 1, args.time_step)
 
     # Get overall stats for order in legend.
-    overall_stats = {tracker: _dataset_quality(assessments[tracker][iou_threshold].values())
+    overall_stats = {tracker: _dataset_quality(assessments[tracker][iou_threshold])
                      for tracker in trackers}
     order = sorted(trackers, key=lambda t: _stats_sort_key(overall_stats[t]), reverse=True)
 
@@ -395,8 +396,7 @@ def _plot_intervals(assessments, tasks, trackers, iou_threshold,
         intervals[mode], points[mode] = _make_intervals(times_sec, mode)
 
     stats = {mode: {tracker: [
-        _dataset_quality_interval(assessments[tracker][iou_threshold], tasks, min_time, max_time,
-                                  bootstrap=False)
+        _dataset_quality_interval(assessments[tracker][iou_threshold], tasks, min_time, max_time)
         for min_time, max_time in intervals[mode]] for tracker in trackers} for mode in INTERVAL_TYPES}
     # Get TPR for all intervals.
     tpr = {mode: {tracker: [s.get('TPR', None) for s in stats[mode][tracker]]
@@ -443,15 +443,17 @@ def _plot_present_absent(
         if not all([label['present'] for t, label in task.labels.items()])]
 
     stats_whole = {
-        tracker: _dataset_quality(assessments[tracker][iou_threshold].values())
+        tracker: _dataset_quality(assessments[tracker][iou_threshold])
         for tracker in trackers}
     stats_all_present = {
-        tracker: _dataset_quality(
-            [assessments[tracker][iou_threshold][key] for key in subset_all_present])
+        tracker: _dataset_quality(oxuva.VideoObjectDict({
+            vid_obj: assessments[tracker][iou_threshold][vid_obj]
+            for vid_obj in subset_all_present}))
         for tracker in trackers}
     stats_any_absent = {
-        tracker: _dataset_quality(
-            [assessments[tracker][iou_threshold][key] for key in subset_any_absent])
+        tracker: _dataset_quality(oxuva.VideoObjectDict({
+            vid_obj: assessments[tracker][iou_threshold][vid_obj]
+            for vid_obj in subset_any_absent}))
         for tracker in trackers}
 
     order = sorted(trackers, key=lambda t: _stats_sort_key(stats_whole[t]), reverse=True)
