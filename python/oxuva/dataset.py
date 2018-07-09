@@ -2,6 +2,9 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import logging
+logger = logging.getLogger(__name__)
+
 from oxuva import util
 
 
@@ -21,7 +24,12 @@ class VideoObjectDict(object):
     '''
 
     def __init__(self, elems=None):
-        self._elems = {} if elems is None else dict(elems)
+        if elems is None:
+            self._elems = dict()
+        elif isinstance(elems, VideoObjectDict):
+            self._elems = dict(elems._elems)
+        else:
+            self._elems = dict(elems)
 
     def videos(self):
         return set([vid for vid, obj in self._elems.keys()])
@@ -59,6 +67,7 @@ class VideoObjectDict(object):
         elems = {}
         for (vid, obj), elem in self._elems.items():
             elems.setdefault(vid, {})[obj] = elem
+        return elems
 
     def update_from_nested_dict(self, elems):
         for vid, vid_elems in elems.items():

@@ -2,6 +2,9 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import logging
+logger = logging.getLogger(__name__)
+
 from oxuva import util
 
 
@@ -44,7 +47,7 @@ def make_task_from_track(track):
     The first frame is adopted as initialization.
     The remaining frames become the ground-truth rectangles.
     '''
-    frames = track['frames'].sorted_items()
+    frames = list(track['frames'].sorted_items())
     init_time, init_annot = frames[0]
     labels = util.SparseTimeSeries(frames[1:])
     # TODO: Check that init_annot['exemplar'] is True.

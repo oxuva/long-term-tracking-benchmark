@@ -8,3 +8,4 @@ workspace/analysis/
 workspace/cache/
 *.swp
 *.swo
+.DS_Store
