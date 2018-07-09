@@ -1,4 +1,4 @@
-# OxUvA long-term tracking benchmark
+# OxUvA long-term tracking benchmark (to appear at ECCV'18)
 
 ## How to get the data
 
