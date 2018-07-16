@@ -50,11 +50,14 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import itertools
+import json
 import math
 
 import logging
 logger = logging.getLogger(__name__)
 
+from oxuva import dataset
 from oxuva import util
 
 
@@ -263,3 +266,130 @@ def max_geometric_mean_line(x1, y1, x2, y2):
     g = lambda x, y: math.sqrt(x * y)
     h = lambda th: g((1 - th) * x1 + th * x2, (1 - th) * y1 + th * y2)
     return max([h(th) for th in candidates])
+
+
+def make_dataset_assessment(counts, interval_counts):
+    return {
+        'counts': counts,
+        'interval_counts': interval_counts,
+    }
+
+
+def union_dataset_assessment(x, y):
+    if x is None:
+        return y
+    if y is None:
+        return x
+    return {
+        'counts': dataset.VideoObjectDict(dict(itertools.chain(
+            x['counts'].items(),
+            y['counts'].items()))),
+        'interval_counts': dataset.VideoObjectDict(dict(itertools.chain(
+            x['interval_counts'].items(),
+            y['interval_counts'].items()))),
+    }
+
+
+def dump_dataset_assessment(x, f):
+    data = {
+        'counts': list(x['counts'].items()),
+        'interval_counts': [
+            (vid_obj, value.elems) for vid_obj, value in x['interval_counts'].items()],
+    }
+    json.dump(data, f)
+
+
+def load_dataset_assessment(f):
+    data = json.load(f)
+    return make_dataset_assessment(
+        counts=dataset.VideoObjectDict({
+            tuple(vid_obj): count for vid_obj, count in data['counts']}),
+        interval_counts=dataset.VideoObjectDict({
+            tuple(vid_obj): IntervalAssessment({
+                tuple(interval): count for interval, count in interval_counts})
+            for vid_obj, interval_counts in data['interval_counts']}),
+    )
+
+
+def assess_dataset(tasks, predictions, iou_threshold, resolution_seconds=30):
+    '''
+    Args:
+        tasks: VideoObjectDict of tasks. Each task must include annotations.
+        predictions: VideoObjectDict of predictions.
+
+    Returns:
+        Enough information to produce the plots.
+    '''
+    assessments = dataset.VideoObjectDict({
+        key: assess_sequence(tasks[key].labels, predictions[key], iou_threshold)
+        for key in tasks.keys()})
+
+    return make_dataset_assessment(
+        counts=dataset.VideoObjectDict({
+            key: assessment_sum(assessments[key].values()) for key in assessments.keys()}),
+        interval_counts=dataset.VideoObjectDict({
+            key: assessment_sum_intervals(assessments[key], init_time=tasks[key].init_time,
+                                          resolution=(30 * resolution_seconds))
+            for key in assessments.keys()}))
+
+
+class IntervalAssessment(object):
+
+    def __init__(self, elems):
+        '''
+        Args:
+            elems: Map from (a, b) to assessment dict.
+        '''
+        if isinstance(elems, dict):
+            elems = list(elems.items())
+        elems = sorted(elems)
+        self.elems = elems
+
+    def get(self, a, b):
+        # Include all bins within [a, b].
+        subset = []
+        for interval, value in self.elems:
+            u, v = interval
+            if u <= a <= b <= v:
+                subset.append(value)
+            elif (a <= u <= b) or (a <= v <= b):
+                raise ValueError('interval {} straddles requested {}'.format(
+                    str((u, v)), str((a, b))))
+        return assessment_sum(subset)
+
+
+def assessment_sum_intervals(assessment, resolution, init_time):
+    '''
+    Args:
+        assessment: SparseTimeSeries of assessment dicts.
+        resolution: Integer specifying temporal resolution.
+        init_time: Absolute time at which tracker was started.
+
+    Returns:
+        Ordered list of ((a, b), value) elements where a, b are integers.
+    '''
+    if int(resolution) != resolution:
+        logger.warning('resolution is not integer: %g', resolution)
+    resolution = int(resolution)
+
+    subsets = {}
+    for abs_time, frame in assessment.items():
+        t = abs_time - init_time
+        i = int(math.ceil(t / float(resolution)))
+        interval = resolution * (i - 1), resolution * i
+        subsets.setdefault(interval, []).append(frame)
+    sums = {interval: assessment_sum(subsets[interval]) for interval in subsets.keys()}
+    return IntervalAssessment(sorted(sums.items()))
+
+
+def bootstrap_video(func, data, num=100):
+    '''
+    Args:
+        func: Maps per-video counts to a dictionary of metrics.
+            This will be called num times.
+        data: VideoObjectDict of counts.
+
+    The function will be called func(x) where x is a list of the values in data.
+    It would normally be called func(data.values()).
+    '''
+    pass

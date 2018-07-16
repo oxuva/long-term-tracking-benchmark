@@ -107,49 +107,73 @@ def main():
     tracker_colors = dict(zip(trackers, color_list))
     tracker_markers = dict(zip(trackers, itertools.cycle(MARKERS)))
 
-    # Each element preds[tracker] is a VideoObjectDict of SparseTimeSeries of prediction dicts.
-    # Only predictions for frames with ground-truth labels are kept.
-    # This is much smaller than the predictions for all frames, and is therefore cached.
-    predictions = {}
-    for dataset in dataset_names:
-        for tracker_ind, tracker in enumerate(trackers):
-            log_context = 'tracker {}/{} {}'.format(tracker_ind + 1, len(trackers), tracker)
-            cache_file = os.path.join(dataset, 'predictions', '{}.pickle'.format(tracker))
-            predictions.setdefault(tracker, {}).update(oxuva.cache_pickle(
-                os.path.join(args.cache_dir, 'analyze', cache_file),
-                lambda: _load_predictions_and_select_frames(
-                    dataset_tasks[dataset],
-                    os.path.join(REPO_DIR, 'predictions', dataset, tracker),
-                    log_prefix=log_context + ': '),
-                ignore_existing=args.ignore_cache))
+    # # Each element preds[tracker] is a VideoObjectDict of SparseTimeSeries of prediction dicts.
+    # # Only predictions for frames with ground-truth labels are kept.
+    # # This is much smaller than the predictions for all frames, and is therefore cached.
+    # predictions = {}
+    # for dataset in dataset_names:
+    #     for tracker_ind, tracker in enumerate(trackers):
+    #         log_context = 'tracker {}/{} {}'.format(tracker_ind + 1, len(trackers), tracker)
+    #         cache_file = os.path.join(dataset, 'predictions', '{}.pickle'.format(tracker))
+    #         predictions.setdefault(tracker, {}).update(oxuva.cache_pickle(
+    #             os.path.join(args.cache_dir, 'analyze', cache_file),
+    #             lambda: _load_predictions_and_select_frames(
+    #                 dataset_tasks[dataset],
+    #                 os.path.join(REPO_DIR, 'predictions', dataset, tracker),
+    #                 log_prefix=log_context + ': '),
+    #             ignore_existing=args.ignore_cache))
 
-    assessments = {}
+    dataset_assessments = {}
     # Obtain results at different IOU thresholds in order to make axes the same in all graphs.
     # TODO: Is it unsafe to use float (iou) as dictionary key?
+    for dataset in dataset_names:
+        dataset_assessments[dataset] = {}
+        for tracker_ind, tracker in enumerate(trackers):
+            log_context = 'tracker {}/{} {}'.format(tracker_ind + 1, len(trackers), tracker)
+            dataset_assessments[dataset][tracker] = {}
+            # Load predictions at most once for all IOU thresholds.
+            # (This can be quite time consuming.)
+            get_predictions = oxuva.Lazy(lambda: _load_predictions_and_select_frames(
+                dataset_tasks[dataset],
+                os.path.join(REPO_DIR, 'predictions', dataset, tracker),
+                log_prefix=log_context + ': '))
+
+            for iou in args.iou_thresholds:
+                logger.info('assess tracker %s with iou %g', tracker, iou)
+                cache_file = os.path.join(dataset, 'assess', 'iou_{}_{}.json'.format(iou, tracker))
+                dataset_assessments[dataset][tracker][iou] = oxuva.cache(
+                    oxuva.Protocol(dump=oxuva.dump_dataset_assessment,
+                                   load=oxuva.load_dataset_assessment, binary=False),
+                    os.path.join(args.cache_dir, 'analyze', cache_file),
+                    lambda: oxuva.assess_dataset(tasks, get_predictions(), iou,
+                                                 resolution_seconds=30),
+                    ignore_existing=args.ignore_cache)
+
+    assessments = {}
     for tracker in trackers:
         assessments[tracker] = {}
         for iou in args.iou_thresholds:
-            logger.info('assess predictions of tracker "%s" with IOU threshold %g', tracker, iou)
-            assessments[tracker][iou] = oxuva.VideoObjectDict({
-                track: oxuva.assess_sequence(tasks[track].labels, predictions[tracker][track], iou)
-                for track in tasks})
+            assessments[tracker][iou] = functools.reduce(
+                oxuva.union_dataset_assessment,
+                (dataset_assessments[dataset][tracker][iou] for dataset in dataset_names),
+                None)
 
-    if args.subcommand == 'table':
-        _print_statistics(assessments, trackers, tracker_names)
-    elif args.subcommand == 'plot_tpr_tnr':
-        _plot_tpr_tnr_overall(assessments, tasks, trackers,
-                              tracker_names, tracker_colors, tracker_markers)
-    elif args.subcommand == 'plot_tpr_tnr_intervals':
-        _plot_tpr_tnr_intervals(assessments, tasks, trackers,
-                                tracker_names, tracker_colors, tracker_markers)
-    elif args.subcommand == 'plot_tpr_time':
-        for iou in args.iou_thresholds:
-            _plot_intervals(assessments, tasks, trackers, iou,
-                            tracker_names, tracker_colors, tracker_markers)
-    elif args.subcommand == 'plot_present_absent':
-        for iou in args.iou_thresholds:
-            _plot_present_absent(assessments, tasks, trackers, iou,
-                                 tracker_names, tracker_colors, tracker_markers)
+    # if args.subcommand == 'table':
+    #     _print_statistics(assessments, trackers, tracker_names)
+    # elif args.subcommand == 'plot_tpr_tnr':
+    #     _plot_tpr_tnr_overall(assessments, tasks, trackers,
+    #                           tracker_names, tracker_colors, tracker_markers)
+    # elif args.subcommand == 'plot_tpr_tnr_intervals':
+    #     _plot_tpr_tnr_intervals(assessments, tasks, trackers,
+    #                             tracker_names, tracker_colors, tracker_markers)
+    # elif args.subcommand == 'plot_tpr_time':
+    #     for iou in args.iou_thresholds:
+    #         _plot_intervals(assessments, tasks, trackers, iou,
+    #                         tracker_names, tracker_colors, tracker_markers)
+    # elif args.subcommand == 'plot_present_absent':
+    #     for iou in args.iou_thresholds:
+    #         _plot_present_absent(assessments, tasks, trackers, iou,
+    #                              tracker_names, tracker_colors, tracker_markers)
 
 
 def _load_tracker_names():
@@ -197,6 +221,7 @@ def _load_predictions_and_select_frames(tasks, tracker_pred_dir, log_prefix=''):
     Returns:
         VideoObjectDict of SparseTimeSeries of frame assessments.
     '''
+    logger.debug('load predictions from "%s"', tracker_pred_dir)
     preds = oxuva.VideoObjectDict()
     for track_num, vid_obj in enumerate(tasks.keys()):
         vid, obj = vid_obj
@@ -204,7 +229,7 @@ def _load_predictions_and_select_frames(tasks, tracker_pred_dir, log_prefix=''):
         track_name = vid + '_' + obj
         log_context = '{}object {}/{} {}'.format(
             log_prefix, track_num + 1, len(tasks), track_name)
-        logger.info(log_context)
+        logger.debug(log_context)
         pred_file = os.path.join(tracker_pred_dir, '{}.csv'.format(track_name))
         try:
             with open(pred_file, 'r') as fp:

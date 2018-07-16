@@ -168,3 +168,24 @@ def select_interval(series, min_time=None, max_time=None, init_time=0):
         t: x for t, x in series.items()
         if ((min_time is None or min_time <= t - init_time) and
             (max_time is None or t - init_time <= max_time))})
+
+
+def to_json(obj):
+    if hasattr(obj, 'to_json'):
+        return obj.to_json()
+    else:
+        return obj
+
+
+class Lazy(object):
+
+    def __init__(self, func):
+        self.func = func
+        self.evaluated = False
+        self.result = None
+
+    def __call__(self):
+        if not self.evaluated:
+            self.result = self.func()
+            self.evaluated = True
+        return self.result
