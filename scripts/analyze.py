@@ -107,22 +107,6 @@ def main():
     tracker_colors = dict(zip(trackers, color_list))
     tracker_markers = dict(zip(trackers, itertools.cycle(MARKERS)))
 
-    # # Each element preds[tracker] is a VideoObjectDict of SparseTimeSeries of prediction dicts.
-    # # Only predictions for frames with ground-truth labels are kept.
-    # # This is much smaller than the predictions for all frames, and is therefore cached.
-    # predictions = {}
-    # for dataset in dataset_names:
-    #     for tracker_ind, tracker in enumerate(trackers):
-    #         log_context = 'tracker {}/{} {}'.format(tracker_ind + 1, len(trackers), tracker)
-    #         cache_file = os.path.join(dataset, 'predictions', '{}.pickle'.format(tracker))
-    #         predictions.setdefault(tracker, {}).update(oxuva.cache_pickle(
-    #             os.path.join(args.cache_dir, 'analyze', cache_file),
-    #             lambda: _load_predictions_and_select_frames(
-    #                 dataset_tasks[dataset],
-    #                 os.path.join(REPO_DIR, 'predictions', dataset, tracker),
-    #                 log_prefix=log_context + ': '),
-    #             ignore_existing=args.ignore_cache))
-
     dataset_assessments = {}
     # Obtain results at different IOU thresholds in order to make axes the same in all graphs.
     # TODO: Is it unsafe to use float (iou) as dictionary key?
@@ -133,22 +117,26 @@ def main():
             dataset_assessments[dataset][tracker] = {}
             # Load predictions at most once for all IOU thresholds.
             # (This can be quite time consuming.)
-            get_predictions = oxuva.Lazy(lambda: _load_predictions_and_select_frames(
+            get_predictions = oxuva.LazyCacheCaller(lambda: _load_predictions_and_select_frames(
                 dataset_tasks[dataset],
                 os.path.join(REPO_DIR, 'predictions', dataset, tracker),
                 log_prefix=log_context + ': '))
 
             for iou in args.iou_thresholds:
-                logger.info('assess tracker %s with iou %g', tracker, iou)
-                cache_file = os.path.join(dataset, 'assess', 'iou_{}_{}.json'.format(iou, tracker))
+                logger.info('assess tracker "%s" with iou %g', tracker, iou)
+                iou_str = _float2str_latex(iou)
+                cache_file = os.path.join(
+                    dataset, 'assess', 'iou_{}_{}.json'.format(iou_str, tracker))
                 dataset_assessments[dataset][tracker][iou] = oxuva.cache(
-                    oxuva.Protocol(dump=oxuva.dump_dataset_assessment,
-                                   load=oxuva.load_dataset_assessment, binary=False),
+                    oxuva.Protocol(dump=oxuva.dump_dataset_assessment_json,
+                                   load=oxuva.load_dataset_assessment_json, binary=False),
                     os.path.join(args.cache_dir, 'analyze', cache_file),
                     lambda: oxuva.assess_dataset(tasks, get_predictions(), iou,
                                                  resolution_seconds=30),
                     ignore_existing=args.ignore_cache)
 
+    # Merge tracks from all datasets.
+    # TODO: Ensure that none have same key?
     assessments = {}
     for tracker in trackers:
         assessments[tracker] = {}
@@ -158,22 +146,24 @@ def main():
                 (dataset_assessments[dataset][tracker][iou] for dataset in dataset_names),
                 None)
 
-    # if args.subcommand == 'table':
-    #     _print_statistics(assessments, trackers, tracker_names)
-    # elif args.subcommand == 'plot_tpr_tnr':
-    #     _plot_tpr_tnr_overall(assessments, tasks, trackers,
-    #                           tracker_names, tracker_colors, tracker_markers)
-    # elif args.subcommand == 'plot_tpr_tnr_intervals':
-    #     _plot_tpr_tnr_intervals(assessments, tasks, trackers,
-    #                             tracker_names, tracker_colors, tracker_markers)
-    # elif args.subcommand == 'plot_tpr_time':
-    #     for iou in args.iou_thresholds:
-    #         _plot_intervals(assessments, tasks, trackers, iou,
-    #                         tracker_names, tracker_colors, tracker_markers)
-    # elif args.subcommand == 'plot_present_absent':
-    #     for iou in args.iou_thresholds:
-    #         _plot_present_absent(assessments, tasks, trackers, iou,
-    #                              tracker_names, tracker_colors, tracker_markers)
+    if args.subcommand == 'table':
+        _print_statistics(assessments, trackers, tracker_names)
+    elif args.subcommand == 'plot_tpr_tnr':
+        _plot_tpr_tnr_overall(assessments, trackers,
+                              tracker_names, tracker_colors, tracker_markers)
+    elif args.subcommand == 'plot_tpr_tnr_intervals':
+        _plot_tpr_tnr_intervals(assessments, trackers,
+                                tracker_names, tracker_colors, tracker_markers)
+    elif args.subcommand == 'plot_tpr_time':
+        for iou in args.iou_thresholds:
+            for bootstrap in ([False, True] if args.bootstrap else [False]):
+                _plot_intervals(assessments, trackers, iou, bootstrap,
+                                tracker_names, tracker_colors, tracker_markers)
+    elif args.subcommand == 'plot_present_absent':
+        for iou in args.iou_thresholds:
+            for bootstrap in ([False, True] if args.bootstrap else [False]):
+                _plot_present_absent(assessments, trackers, iou, bootstrap,
+                                     tracker_names, tracker_colors, tracker_markers)
 
 
 def _load_tracker_names():
@@ -221,7 +211,7 @@ def _load_predictions_and_select_frames(tasks, tracker_pred_dir, log_prefix=''):
     Returns:
         VideoObjectDict of SparseTimeSeries of frame assessments.
     '''
-    logger.debug('load predictions from "%s"', tracker_pred_dir)
+    logger.info('load predictions from "%s"', tracker_pred_dir)
     preds = oxuva.VideoObjectDict()
     for track_num, vid_obj in enumerate(tasks.keys()):
         vid, obj = vid_obj
@@ -252,8 +242,8 @@ def _print_statistics(assessments, trackers, names=None):
             [key, key + '_mean', key + '_var'] for key in fields))
     names = names or {}
     stats = {tracker: {iou: (
-        _dataset_quality(assessments[tracker][iou],
-                         bootstrap=args.bootstrap, num_trials=args.bootstrap_trials))
+        oxuva.dataset_quality(assessments[tracker][iou]['totals'],
+                              num_trials=args.bootstrap_trials))
         for iou in args.iou_thresholds} for tracker in trackers}
     table_dir = os.path.join('analysis', args.data, args.challenge)
     _ensure_dir_exists(table_dir)
@@ -270,7 +260,7 @@ def _print_statistics(assessments, trackers, names=None):
             print(','.join(row), file=f)
 
 
-def _plot_tpr_tnr_overall(assessments, tasks, trackers,
+def _plot_tpr_tnr_overall(assessments, trackers,
                           names=None, colors=None, markers=None):
     bootstrap_modes = [False, True] if args.bootstrap else [False]
 
@@ -278,24 +268,25 @@ def _plot_tpr_tnr_overall(assessments, tasks, trackers,
         for bootstrap in bootstrap_modes:
             _plot_tpr_tnr(('tpr_tnr_iou_' + _float2str_latex(iou) +
                            ('_bootstrap' if bootstrap else '')),
-                          assessments, tasks, trackers, iou, bootstrap,
+                          assessments, trackers, iou, bootstrap,
                           names=names, colors=colors, markers=markers,
-                          min_time=None, max_time=None, include_score=True,
+                          min_time_sec=None, max_time_sec=None, include_score=True,
                           legend_kwargs=dict(loc='lower left', bbox_to_anchor=(0.05, 0)))
 
 
-def _plot_tpr_tnr_intervals(assessments, tasks, trackers,
+def _plot_tpr_tnr_intervals(assessments, trackers,
                             names=None, colors=None, markers=None):
     modes = ['before', 'after']
-    intervals = {}
+    intervals_sec = {}
     for mode in modes:
-        intervals[mode], _ = _make_intervals(args.times, mode)
+        intervals_sec[mode], _ = _make_intervals(args.times, mode)
 
     bootstrap_modes = [False, True] if args.bootstrap else [False]
     for bootstrap in bootstrap_modes:
         for iou in args.iou_thresholds:
             # Order by performance on all frames.
-            stats = {tracker: _dataset_quality(assessments[tracker][iou], bootstrap=bootstrap)
+            stats = {tracker: oxuva.dataset_quality(assessments[tracker][iou]['totals'],
+                                                    num_trials=args.bootstrap_trials)
                      for tracker in trackers}
             order = sorted(trackers,
                            key=lambda t: _stats_sort_key(stats[t], bootstrap=bootstrap),
@@ -303,28 +294,33 @@ def _plot_tpr_tnr_intervals(assessments, tasks, trackers,
 
             tpr_key = 'TPR_mean' if bootstrap else 'TPR'
             # Get stats for all plots to establish axis range.
-            # Note: This means that _dataset_quality_interval() is called twice.
+            # Note: This means that dataset_quality_interval() is called twice.
             max_tpr = max([max([max([
-                _dataset_quality_interval(assessments[tracker][iou], tasks, min_time, max_time,
-                                          bootstrap=bootstrap)[tpr_key]
-                for tracker in trackers]) for min_time, max_time in intervals[mode]]) for mode in modes])
+                oxuva.dataset_quality_interval(
+                    assessments[tracker][iou]['quantized_totals'],
+                    num_trials=args.bootstrap_trials,
+                    min_time=None if min_time is None else FRAME_RATE * min_time,
+                    max_time=None if max_time is None else FRAME_RATE * max_time)[tpr_key]
+                for tracker in trackers])
+                for min_time, max_time in intervals_sec[mode]])
+                for mode in modes])
 
             for mode in modes:
-                for min_time, max_time in intervals[mode]:
+                for min_time_sec, max_time_sec in intervals_sec[mode]:
                     base_name = '_'.join(
                         ['tpr_tnr', 'iou_' + _float2str_latex(iou),
-                         'interval_{}_{}'.format(_float2str_latex(min_time),
-                                                 _float2str_latex(max_time))] +
+                         'interval_{}_{}'.format(_float2str_latex(min_time_sec),
+                                                 _float2str_latex(max_time_sec))] +
                         (['bootstrap'] if bootstrap else []))
-                    _plot_tpr_tnr(base_name, assessments, tasks, trackers, iou, bootstrap,
-                                  min_time=min_time, max_time=max_time,
+                    _plot_tpr_tnr(base_name, assessments, trackers, iou, bootstrap,
+                                  min_time_sec=min_time_sec, max_time_sec=max_time_sec,
                                   max_tpr=max_tpr, order=order, enable_posthoc=False,
                                   names=names, colors=colors, markers=markers,
                                   legend_kwargs=dict(loc='upper right'))
 
 
-def _plot_tpr_tnr(base_name, assessments, tasks, trackers, iou_threshold, bootstrap,
-                  min_time=None, max_time=None, include_score=False,
+def _plot_tpr_tnr(base_name, assessments, trackers, iou_threshold, bootstrap,
+                  min_time_sec=None, max_time_sec=None, include_score=False,
                   max_tpr=None, order=None, enable_posthoc=True,
                   names=None, colors=None, markers=None, legend_kwargs=None):
     names = names or {}
@@ -336,9 +332,12 @@ def _plot_tpr_tnr(base_name, assessments, tasks, trackers, iou_threshold, bootst
     tnr_key = 'TNR_mean' if bootstrap else 'TNR'
 
     for iou in args.iou_thresholds:
-        stats = {tracker: _dataset_quality_interval(
-            assessments[tracker][iou_threshold], tasks, min_time, max_time,
-            bootstrap=bootstrap, num_trials=args.bootstrap_trials)
+        stats = {
+            tracker: oxuva.dataset_quality_interval(
+                assessments[tracker][iou_threshold]['quantized_totals'],
+                min_time=None if min_time_sec is None else FRAME_RATE * min_time_sec,
+                max_time=None if max_time_sec is None else FRAME_RATE * max_time_sec,
+                num_trials=args.bootstrap_trials)
             for tracker in trackers}
         if order is None:
             sort_key = lambda t: _stats_sort_key(stats[t], bootstrap=bootstrap)
@@ -382,16 +381,16 @@ def _plot_tpr_tnr(base_name, assessments, tasks, trackers, iou_threshold, bootst
         plt.gca().legend().set_visible(False)
         _save_fig(os.path.join(plot_dir, base_name + '_no_legend.pdf'))
 
-        if enable_posthoc and not bootstrap:
-            # Add posthoc-threshold curves to figure.
-            # TODO: Plot distribution of post-hoc curves when using bootstrap sampling?
-            plt.legend(**legend_kwargs)
-            for tracker in trackers:
-                _plot_posthoc_curve(assessments[tracker][iou_threshold],
-                                    marker='', color=colors.get(tracker, None))
-            _save_fig(os.path.join(plot_dir, base_name + '_posthoc.pdf'))
-            plt.gca().legend().set_visible(False)
-            _save_fig(os.path.join(plot_dir, base_name + '_posthoc_no_legend.pdf'))
+        # if enable_posthoc and not bootstrap:
+        #     # Add posthoc-threshold curves to figure.
+        #     # TODO: Plot distribution of post-hoc curves when using bootstrap sampling?
+        #     plt.legend(**legend_kwargs)
+        #     for tracker in trackers:
+        #         _plot_posthoc_curve(assessments[tracker][iou_threshold],
+        #                             marker='', color=colors.get(tracker, None))
+        #     _save_fig(os.path.join(plot_dir, base_name + '_posthoc.pdf'))
+        #     plt.gca().legend().set_visible(False)
+        #     _save_fig(os.path.join(plot_dir, base_name + '_posthoc_no_legend.pdf'))
 
 
 def _plot_posthoc_curve(assessments, **kwargs):
@@ -402,7 +401,7 @@ def _plot_posthoc_curve(assessments, **kwargs):
              [point['TPR'] for point in metrics], **kwargs)
 
 
-def _plot_intervals(assessments, tasks, trackers, iou_threshold,
+def _plot_intervals(assessments, trackers, iou_threshold, bootstrap,
                     names=None, colors=None, markers=None):
     # TODO: Add errorbars using bootstrap sampling?
     names = names or {}
@@ -411,86 +410,104 @@ def _plot_intervals(assessments, tasks, trackers, iou_threshold,
     times_sec = range(0, args.max_time + 1, args.time_step)
 
     # Get overall stats for order in legend.
-    overall_stats = {tracker: _dataset_quality(assessments[tracker][iou_threshold])
+    overall_stats = {tracker: oxuva.dataset_quality(assessments[tracker][iou_threshold]['totals'],
+                                                    num_trials=args.bootstrap_trials)
                      for tracker in trackers}
     order = sorted(trackers, key=lambda t: _stats_sort_key(overall_stats[t]), reverse=True)
 
-    intervals = {}
+    intervals_sec = {}
     points = {}
     for mode in INTERVAL_TYPES:
-        intervals[mode], points[mode] = _make_intervals(times_sec, mode)
+        intervals_sec[mode], points[mode] = _make_intervals(times_sec, mode)
 
     stats = {mode: {tracker: [
-        _dataset_quality_interval(assessments[tracker][iou_threshold], tasks, min_time, max_time)
-        for min_time, max_time in intervals[mode]] for tracker in trackers} for mode in INTERVAL_TYPES}
-    # Get TPR for all intervals.
-    tpr = {mode: {tracker: [s.get('TPR', None) for s in stats[mode][tracker]]
-                  for tracker in trackers} for mode in INTERVAL_TYPES}
+        oxuva.dataset_quality_interval(
+            assessments[tracker][iou_threshold]['quantized_totals'],
+            min_time=None if min_time is None else FRAME_RATE * min_time,
+            max_time=None if max_time is None else FRAME_RATE * max_time,
+            enable_bootstrap=bootstrap, num_trials=args.bootstrap_trials)
+        for min_time, max_time in intervals_sec[mode]]
+        for tracker in trackers} for mode in INTERVAL_TYPES}
+    tpr_key = 'TPR_mean' if bootstrap else 'TPR'
     # Find maximum TPR value over all plots (to have same axes).
-    max_tpr = {mode: max(val for tracker in trackers for val in tpr[mode][tracker] if val is not None)
-               for mode in INTERVAL_TYPES}
+    max_tpr = {
+        mode: max(s[tpr_key] for tracker in trackers for s in stats[mode][tracker] if tpr_key in s)
+        for mode in INTERVAL_TYPES}
 
     for mode in INTERVAL_TYPES:
         plt.figure(figsize=(args.width_inches, args.height_inches))
         plt.xlabel(INTERVAL_AXIS_LABEL[mode])
         plt.ylabel('True Positive Rate')
         for tracker in order:
-            plt.plot(1 / 60.0 * np.asfarray(points[mode]), tpr[mode][tracker],
-                     label=names.get(tracker, tracker),
-                     marker=markers.get(tracker, None),
-                     color=colors.get(tracker, None),
-                     markerfacecolor='none', markeredgewidth=2, clip_on=False)
+            tpr = [s.get(tpr_key, None) for s in stats[mode][tracker]]
+            if bootstrap:
+                tpr_var = [s.get('TPR_var', None) for s in stats[mode][tracker]]
+                plot_func = functools.partial(
+                    _errorbar,
+                    yerr=ERRORBAR_NUM_SIGMA * np.sqrt(tpr_var),
+                    capsize=3)
+            else:
+                plot_func = plt.plot
+            plot_func(1 / 60.0 * np.asarray(points[mode]), tpr,
+                      label=names.get(tracker, tracker),
+                      marker=markers.get(tracker, None),
+                      color=colors.get(tracker, None),
+                      markerfacecolor='none', markeredgewidth=2, clip_on=False)
         plt.xlim(xmin=0, xmax=args.max_time / 60.0)
         ymax = max(max_tpr.values()) if args.same_axes else max_tpr[mode]
         plt.ylim(ymin=0, ymax=_ceil_nearest(CLEARANCE * ymax, 0.1))
         plt.grid(color=GRID_COLOR)
         plot_dir = os.path.join('analysis', args.data, args.challenge)
         _ensure_dir_exists(plot_dir)
-        base_name = 'tpr_time_iou_{}_interval_{}'.format(_float2str_latex(iou_threshold), mode)
+        base_name = ('tpr_time_iou_{}_interval_{}'.format(_float2str_latex(iou_threshold), mode) +
+                     ('_bootstrap' if bootstrap else ''))
         _save_fig(os.path.join(plot_dir, base_name + '_no_legend.pdf'))
         plt.legend()
         _save_fig(os.path.join(plot_dir, base_name + '.pdf'))
 
 
 def _plot_present_absent(
-        assessments, tasks, trackers, iou_threshold,
+        assessments, trackers, iou_threshold, bootstrap,
         names=None, colors=None, markers=None):
     names = names or {}
     colors = colors or {}
     markers = markers or {}
 
-    # Find subset of tasks that have absent frames.
-    subset_all_present = [
-        key for key, task in tasks.items()
-        if all([label['present'] for t, label in task.labels.items()])]
-    subset_any_absent = [
-        key for key, task in tasks.items()
-        if not all([label['present'] for t, label in task.labels.items()])]
-
     stats_whole = {
-        tracker: _dataset_quality(assessments[tracker][iou_threshold])
+        tracker: oxuva.dataset_quality(
+            assessments[tracker][iou_threshold]['totals'],
+            enable_bootstrap=bootstrap, num_trials=args.bootstrap_trials)
         for tracker in trackers}
     stats_all_present = {
-        tracker: _dataset_quality(oxuva.VideoObjectDict({
-            vid_obj: assessments[tracker][iou_threshold][vid_obj]
-            for vid_obj in subset_all_present}))
+        tracker: oxuva.dataset_quality_filter(
+            assessments[tracker][iou_threshold]['totals'], require_none_absent=True,
+            enable_bootstrap=bootstrap, num_trials=args.bootstrap_trials)
         for tracker in trackers}
     stats_any_absent = {
-        tracker: _dataset_quality(oxuva.VideoObjectDict({
-            vid_obj: assessments[tracker][iou_threshold][vid_obj]
-            for vid_obj in subset_any_absent}))
+        tracker: oxuva.dataset_quality_filter(
+            assessments[tracker][iou_threshold]['totals'], require_some_absent=True,
+            enable_bootstrap=bootstrap, num_trials=args.bootstrap_trials)
         for tracker in trackers}
 
     order = sorted(trackers, key=lambda t: _stats_sort_key(stats_whole[t]), reverse=True)
-    max_tpr = max(max([stats_all_present[tracker]['TPR'] for tracker in trackers]),
-                  max([stats_any_absent[tracker]['TPR'] for tracker in trackers]))
+    tpr_key = 'TPR_mean' if bootstrap else 'TPR'
+    max_tpr = max(max([stats_all_present[tracker][tpr_key] for tracker in trackers]),
+                  max([stats_any_absent[tracker][tpr_key] for tracker in trackers]))
 
     plt.figure(figsize=(args.width_inches, args.height_inches))
     plt.xlabel('TPR (tracks without absent labels)')
     plt.ylabel('TPR (tracks with some absent labels)')
     for tracker in order:
-        plt.plot(
-            [stats_all_present[tracker]['TPR']], [stats_any_absent[tracker]['TPR']],
+        if bootstrap:
+            plot_func = functools.partial(
+                _errorbar,
+                xerr=ERRORBAR_NUM_SIGMA * np.sqrt([stats_all_present[tracker]['TPR_var']]),
+                yerr=ERRORBAR_NUM_SIGMA * np.sqrt([stats_any_absent[tracker]['TPR_var']]),
+                capsize=3)
+        else:
+            plot_func = plt.plot
+        plot_func(
+            [stats_all_present[tracker][tpr_key]], [stats_any_absent[tracker][tpr_key]],
             label=names.get(tracker, tracker),
             color=colors.get(tracker, None),
             marker=markers.get(tracker, None),
@@ -502,7 +519,8 @@ def _plot_present_absent(
     plt.plot([0, 1], [0, 1], color=GRID_COLOR, linewidth=1, linestyle='dotted')
     plot_dir = os.path.join('analysis', args.data, args.challenge)
     _ensure_dir_exists(plot_dir)
-    base_name = 'present_absent_iou_{}'.format(_float2str_latex(iou_threshold))
+    base_name = ('present_absent_iou_{}'.format(_float2str_latex(iou_threshold)) +
+                 ('_bootstrap' if bootstrap else ''))
     # _save_fig(os.path.join(plot_dir, base_name + '_no_legend.pdf'))
     plt.legend()
     _save_fig(os.path.join(plot_dir, base_name + '.pdf'))
@@ -534,131 +552,6 @@ def _make_intervals(values, interval_type):
         intervals = zip(values, values[1:])
         points = [0.5 * (a + b) for a, b in intervals]
     return intervals, points
-
-
-def _dataset_quality(assessments, bootstrap=False, num_trials=10, base_seed=0):
-    '''Computes the overall quality of predictions on a dataset.
-    The predictions of all tracks are pooled together.
-
-    Args:
-        assessments: VideoObjectDict of SparseTimeSeries of frame assessment dicts.
-        bootstrap: Include results that involve bootstrap sampling?
-
-    Returns:
-        List that contains statistics for each interval.
-    '''
-    # Compute the total per sequence.
-    seq_totals = oxuva.VideoObjectDict(
-        {vid_obj: oxuva.assessment_sum(assessments[vid_obj].values())
-        for vid_obj in assessments.keys()})
-
-    quality = _summarize_simple(seq_totals.values())
-    if bootstrap:
-        quality.update(_summarize_bootstrap(seq_totals, num_trials, base_seed=base_seed))
-    return quality
-
-
-def _dataset_quality_interval(assessments, tasks, min_time_seconds, max_time_seconds, **kwargs):
-    '''Computes the overall quality of predictions on a dataset.
-
-    Args:
-        tasks: VideoObjectDict of Tasks.
-            This is required to get the initial frame number of each track.
-        kwargs: For _dataset_quality().
-
-    Returns:
-        List that contains statistics for each interval.
-    '''
-    min_time = None if min_time_seconds is None else FRAME_RATE * min_time_seconds
-    max_time = None if max_time_seconds is None else FRAME_RATE * max_time_seconds
-    assessments = {
-        vid_obj: oxuva.select_interval(assessments[vid_obj], min_time, max_time,
-                                       init_time=tasks[vid_obj].init_time)
-        for vid_obj in assessments}
-    return _dataset_quality(assessments, **kwargs)
-
-
-def _summarize_simple(seq_totals):
-    '''Obtain dataset quality from per-sequence assessments.
-
-    Args:
-        seq_totals: List of per-sequence assessment dicts.
-
-    This supports a list for use in bootstrap sampling, where names are no longer unique.
-
-    Beware: This takes sequence assessments not frame assessments.
-    '''
-    # if isinstance(seq_totals, oxuva.VideoObjectDict):
-    #     seq_totals = seq_totals.values()
-    dataset_total = oxuva.assessment_sum(seq_totals)
-    return oxuva.quality_metrics(dataset_total)
-
-
-def _summarize_bootstrap(seq_totals, num_trials, base_seed=0):
-    '''Obtain dataset quality from per-sequence assessments using bootstrap sampling.
-
-    Args:
-        seq_totals: VideoObjectDict of sequence assessments.
-            Bootstrap sampling is performed on videos not tracks since these are independent.
-
-    VideoObjectDict is required because sampling is performed on videos not tracks.
-
-    Beware: This takes sequence assessments not frame assessments.
-    '''
-    trial_metrics = []
-    for i in range(num_trials):
-        sample = _bootstrap_sample_by_video(seq_totals, seed=(base_seed + i))
-        logger.debug('bootstrap trial %d: num sequences %d', i + 1, len(sample))
-        trial_metrics.append(_summarize_simple(sample))
-    return _stats_from_repetitions(trial_metrics)
-
-
-def _stats_from_repetitions(xs):
-    '''Maps a list of dictionaries to the mean and variance of the values.'''
-    # Check that all dictionaries have the same keys.
-    fields = _get_keys_and_assert_equal(xs)
-    stats = {}
-    stats.update({field + '_mean': np.mean([x[field] for x in xs]) for field in fields})
-    stats.update({field + '_var': np.var([x[field] for x in xs]) for field in fields})
-    return stats
-
-
-def _get_keys_and_assert_equal(xs):
-    '''Asserts that all dictionaries have the same keys and returns the set of keys.'''
-    assert len(xs) > 0
-    fields = None
-    for x in xs:
-        curr_fields = set(x.keys())
-        if fields is None:
-            fields = curr_fields
-        else:
-            if curr_fields != fields:
-                raise ValueError('fields differ: {} and {}', fields, curr_fields)
-    return fields
-
-
-def _bootstrap_sample_by_video(tracks, seed):
-    '''
-    Args:
-        tracks: VideoObjectDict
-
-    Returns:
-        List of tracks.
-
-    Usage:
-        Let `seq_totals` be a VideoObjectDict of per-sequence assessment dicts.
-        Instead of:
-            quality = _summarize_simple(seq_totals.values())
-        One can do:
-            sample = _bootstrap_sample_by_video(seq_totals, seed=0)
-            quality = _summarize_simple(sample)
-    '''
-    assert isinstance(tracks, oxuva.VideoObjectDict)
-    by_video = tracks.to_nested_dict()
-    rand = np.random.RandomState(seed)
-    names = list(by_video.keys())
-    names_sample = rand.choice(names, len(by_video), replace=True)
-    return list(itertools.chain.from_iterable(by_video[name].values() for name in names_sample))
 
 
 def _ensure_dir_exists(dir):

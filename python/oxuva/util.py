@@ -46,9 +46,9 @@ def harmonic_mean(*args):
 
 
 def geometric_mean(*args):
-    assert all([x >= 0 for x in args])
-    if any([x == 0 for x in args]):
-        return 0.
+    # assert all([x >= 0 for x in args])
+    # if any([x == 0 for x in args]):
+    #     return 0.
     return np.asscalar(np.exp(np.mean(np.log(args))))
 
 
@@ -170,14 +170,7 @@ def select_interval(series, min_time=None, max_time=None, init_time=0):
             (max_time is None or t - init_time <= max_time))})
 
 
-def to_json(obj):
-    if hasattr(obj, 'to_json'):
-        return obj.to_json()
-    else:
-        return obj
-
-
-class Lazy(object):
+class LazyCacheCaller(object):
 
     def __init__(self, func):
         self.func = func
