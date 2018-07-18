@@ -471,6 +471,7 @@ def dataset_quality(totals, enable_bootstrap=True, num_trials=None, base_seed=0)
         if num_trials is None:
             raise ValueError('must specify number of trials for bootstrap sampling')
         quality.update(bootstrap(summarize, totals, num_trials, base_seed=base_seed))
+    quality = {k: np.asarray(v).tolist() for k, v in quality.items()}
     return quality
 
 
@@ -488,6 +489,7 @@ def dataset_quality_interval(quantized_assessments, min_time=None, max_time=None
         if num_trials is None:
             raise ValueError('must specify number of trials for bootstrap sampling')
         quality.update(bootstrap(summarize, interval_totals, num_trials, base_seed=base_seed))
+    quality = {k: np.asarray(v).tolist() for k, v in quality.items()}
     return quality
 
 
@@ -502,6 +504,7 @@ def dataset_quality_filter(totals, require_none_absent=False, require_some_absen
         if num_trials is None:
             raise ValueError('must specify number of trials for bootstrap sampling')
         quality.update(bootstrap(summarize_func, totals, num_trials, base_seed=base_seed))
+    quality = {k: np.asarray(v).tolist() for k, v in quality.items()}
     return quality
 
 
