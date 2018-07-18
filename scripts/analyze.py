@@ -397,9 +397,8 @@ def _plot_intervals(assessments, trackers, iou_threshold, bootstrap,
         for tracker in trackers} for mode in INTERVAL_TYPES}
     tpr_key = 'TPR_mean' if bootstrap else 'TPR'
     # Find maximum TPR value over all plots (to have same axes).
-    max_tpr = {
-        mode: max(s[tpr_key] for tracker in trackers for s in stats[mode][tracker] if tpr_key in s)
-        for mode in INTERVAL_TYPES}
+    max_tpr = {mode: max(s[tpr_key] for tracker in trackers for s in stats[mode][tracker])
+               for mode in INTERVAL_TYPES}
 
     for mode in INTERVAL_TYPES:
         plt.figure(figsize=(args.width_inches, args.height_inches))
@@ -516,7 +515,7 @@ def _make_intervals(values, interval_type):
         intervals = [(x, float('inf')) for x in values]
         points = list(values)
     elif interval_type == 'between':
-        intervals = zip(values, values[1:])
+        intervals = list(zip(values, values[1:]))
         points = [0.5 * (a + b) for a, b in intervals]
     return intervals, points
 

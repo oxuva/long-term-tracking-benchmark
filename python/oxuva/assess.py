@@ -311,7 +311,6 @@ def make_dataset_assessment(totals, quantized_totals):
     return {
         'totals': totals,
         'quantized_totals': quantized_totals,
-        # 'frame_assessments': frame_assessments,
     }
 
 
@@ -329,10 +328,6 @@ def union_dataset_assessment(x, y):
             x['quantized_totals'].items(),
             y['quantized_totals'].items()))),
     }
-    # return make_dataset_assessment(
-    #     frame_assessments=dataset.VideoObjectDict(dict(itertools.chain(
-    #         x['frame_assessments'].items(),
-    #         y['frame_assessments'].items()))))
 
 
 def dump_dataset_assessment_json(x, f):
@@ -344,14 +339,7 @@ def dump_dataset_assessment_json(x, f):
         'quantized_totals': [
             (vid_obj, value.elems) for vid_obj, value in x['quantized_totals'].items()],
     }
-    # data = {
-    #     # Convert VideoObjectDicgt to list of items because JSON does not support tuple keys.
-    #     # Convert each TimeSeries to list of (integer, value) pairs.
-    #     'frame_assessments': [
-    #         (vid_obj, list(time_series.sorted_items()))
-    #         for vid_obj, time_series in x['frame_assessments'].items()],
-    # }
-    json.dump(data, f)
+    json.dump(data, f, sort_keys=True)
 
 
 def load_dataset_assessment_json(f):
@@ -363,10 +351,6 @@ def load_dataset_assessment_json(f):
             tuple(vid_obj): QuantizedAssessment({
                 tuple(interval): total for interval, total in quantized_totals})
             for vid_obj, quantized_totals in data['quantized_totals']}))
-    # return make_dataset_assessment(
-    #     frame_assessments=dataset.VideoObjectDict({
-    #         tuple(vid_obj): util.SparseTimeSeries(time_series)
-    #         for vid_obj, time_series in data['frame_assessments']}))
 
 
 def assess_dataset(tasks, predictions, iou_threshold, resolution_seconds=30):
@@ -388,7 +372,6 @@ def assess_dataset(tasks, predictions, iou_threshold, resolution_seconds=30):
             key: quantize_sequence_assessment(assessments[key], init_time=tasks[key].init_time,
                                               resolution=(FRAME_RATE * resolution_seconds))
             for key in assessments.keys()}))
-    # return make_dataset_assessment(frame_assessments=assessments)
 
 
 class QuantizedAssessment(object):
