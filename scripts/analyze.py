@@ -115,18 +115,18 @@ def main():
         for tracker_ind, tracker in enumerate(trackers):
             log_context = 'tracker {}/{} {}'.format(tracker_ind + 1, len(trackers), tracker)
             dataset_assessments[dataset][tracker] = {}
-            # Load predictions at most once for all IOU thresholds.
-            # (This can be quite time consuming.)
-            get_predictions = oxuva.LazyCacheCaller(lambda: _load_predictions_and_select_frames(
-                dataset_tasks[dataset],
-                os.path.join(REPO_DIR, 'predictions', dataset, tracker),
-                log_prefix=log_context + ': '))
+            # Load predictions at most once for all IOU thresholds (can be slow).
+            get_predictions = oxuva.LazyCacheCaller(
+                lambda: oxuva.load_predictions_and_select_frames(
+                    dataset_tasks[dataset],
+                    os.path.join(REPO_DIR, 'predictions', dataset, tracker),
+                    permissive=args.permissive,
+                    log_prefix=log_context + ': '))
 
             for iou in args.iou_thresholds:
                 logger.info('assess tracker "%s" with iou %g', tracker, iou)
-                iou_str = _float2str_latex(iou)
                 cache_file = os.path.join(
-                    dataset, 'assess', 'iou_{}_{}.json'.format(iou_str, tracker))
+                    dataset, 'assess', tracker, 'iou_{}.json'.format(oxuva.float2str(iou)))
                 dataset_assessments[dataset][tracker][iou] = oxuva.cache(
                     oxuva.Protocol(dump=oxuva.dump_dataset_assessment_json,
                                    load=oxuva.load_dataset_assessment_json, binary=False),
@@ -201,39 +201,6 @@ def _load_tasks(fname):
     return oxuva.map_dict(oxuva.make_task_from_track, tracks)
 
 
-def _load_predictions_and_select_frames(tasks, tracker_pred_dir, log_prefix=''):
-    '''Loads all predictions of a tracker and takes the subset of frames with ground truth.
-
-    Args:
-        tasks: VideoObjectDict of Tasks.
-        tracker_pred_dir: Directory that contains files video_object.csv
-
-    Returns:
-        VideoObjectDict of SparseTimeSeries of frame assessments.
-    '''
-    logger.info('load predictions from "%s"', tracker_pred_dir)
-    preds = oxuva.VideoObjectDict()
-    for track_num, vid_obj in enumerate(tasks.keys()):
-        vid, obj = vid_obj
-        task = tasks[vid_obj]
-        track_name = vid + '_' + obj
-        log_context = '{}object {}/{} {}'.format(
-            log_prefix, track_num + 1, len(tasks), track_name)
-        logger.debug(log_context)
-        pred_file = os.path.join(tracker_pred_dir, '{}.csv'.format(track_name))
-        try:
-            with open(pred_file, 'r') as fp:
-                pred = oxuva.load_predictions_csv(fp)
-        except IOError as exc:
-            if args.permissive:
-                print('warning: exclude track {}: {}'.format(track_name, str(exc)), file=sys.stderr)
-            else:
-                raise
-        pred = oxuva.subset_using_previous_if_missing(pred, task.labels.sorted_keys())
-        preds[vid_obj] = pred
-    return preds
-
-
 def _print_statistics(assessments, trackers, names=None):
     fields = ['TPR', 'TNR', 'GM', 'MaxGM']
     if args.bootstrap:
@@ -266,7 +233,7 @@ def _plot_tpr_tnr_overall(assessments, trackers,
 
     for iou in args.iou_thresholds:
         for bootstrap in bootstrap_modes:
-            _plot_tpr_tnr(('tpr_tnr_iou_' + _float2str_latex(iou) +
+            _plot_tpr_tnr(('tpr_tnr_iou_' + oxuva.float2str(iou) +
                            ('_bootstrap' if bootstrap else '')),
                           assessments, trackers, iou, bootstrap,
                           names=names, colors=colors, markers=markers,
@@ -308,9 +275,9 @@ def _plot_tpr_tnr_intervals(assessments, trackers,
             for mode in modes:
                 for min_time_sec, max_time_sec in intervals_sec[mode]:
                     base_name = '_'.join(
-                        ['tpr_tnr', 'iou_' + _float2str_latex(iou),
-                         'interval_{}_{}'.format(_float2str_latex(min_time_sec),
-                                                 _float2str_latex(max_time_sec))] +
+                        ['tpr_tnr', 'iou_' + oxuva.float2str(iou),
+                         'interval_{}_{}'.format(oxuva.float2str(min_time_sec),
+                                                 oxuva.float2str(max_time_sec))] +
                         (['bootstrap'] if bootstrap else []))
                     _plot_tpr_tnr(base_name, assessments, trackers, iou, bootstrap,
                                   min_time_sec=min_time_sec, max_time_sec=max_time_sec,
@@ -459,7 +426,7 @@ def _plot_intervals(assessments, trackers, iou_threshold, bootstrap,
         plt.grid(color=GRID_COLOR)
         plot_dir = os.path.join('analysis', args.data, args.challenge)
         _ensure_dir_exists(plot_dir)
-        base_name = ('tpr_time_iou_{}_interval_{}'.format(_float2str_latex(iou_threshold), mode) +
+        base_name = ('tpr_time_iou_{}_interval_{}'.format(oxuva.float2str(iou_threshold), mode) +
                      ('_bootstrap' if bootstrap else ''))
         _save_fig(os.path.join(plot_dir, base_name + '_no_legend.pdf'))
         plt.legend()
@@ -519,7 +486,7 @@ def _plot_present_absent(
     plt.plot([0, 1], [0, 1], color=GRID_COLOR, linewidth=1, linestyle='dotted')
     plot_dir = os.path.join('analysis', args.data, args.challenge)
     _ensure_dir_exists(plot_dir)
-    base_name = ('present_absent_iou_{}'.format(_float2str_latex(iou_threshold)) +
+    base_name = ('present_absent_iou_{}'.format(oxuva.float2str(iou_threshold)) +
                  ('_bootstrap' if bootstrap else ''))
     # _save_fig(os.path.join(plot_dir, base_name + '_no_legend.pdf'))
     plt.legend()
@@ -601,10 +568,6 @@ def _tracker_label(name, include_score, stats, bootstrap):
     max_at_point = abs(stats[gm_key] - stats[max_gm_key]) <= 1e-3
     asterisk = '*' if max_at_point else ''
     return '{} ({:.2f}{})'.format(name, stats[max_gm_key], asterisk)
-
-
-def _float2str_latex(x):
-    return str(x).replace('.', 'd')
 
 
 def _errorbar(*args, **kwargs):

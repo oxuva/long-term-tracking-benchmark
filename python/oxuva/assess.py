@@ -55,11 +55,13 @@ import itertools
 import json
 import math
 import numpy as np
+import os
 
 import logging
 logger = logging.getLogger(__name__)
 
 from oxuva import dataset
+from oxuva import io_pred
 from oxuva import util
 
 
@@ -128,6 +130,36 @@ def subset_using_previous_if_missing(series, times):
             logger.warning('no prediction for time %d: use prediction for time %s', t, t_curr)
         subset[i] = x_curr
     return util.SparseTimeSeries(zip(times, subset))
+
+
+def load_predictions_and_select_frames(tasks, tracker_pred_dir, permissive=False, log_prefix=''):
+    '''Loads all predictions of a tracker and takes the subset of frames with ground truth.
+
+    Args:
+        tasks: VideoObjectDict of Tasks.
+        tracker_pred_dir: Directory that contains files video_object.csv
+
+    Returns:
+        VideoObjectDict of SparseTimeSeries of frame assessments.
+    '''
+    logger.info('load predictions from "%s"', tracker_pred_dir)
+    preds = dataset.VideoObjectDict()
+    for track_num, vid_obj in enumerate(tasks.keys()):
+        vid, obj = vid_obj
+        track_name = vid + '_' + obj
+        logger.debug(log_prefix + 'object {}/{} {}'.format(track_num + 1, len(tasks), track_name))
+        pred_file = os.path.join(tracker_pred_dir, '{}.csv'.format(track_name))
+        try:
+            with open(pred_file, 'r') as fp:
+                pred = io_pred.load_predictions_csv(fp)
+        except IOError as exc:
+            if permissive:
+                logger.warning('exclude track %s: %s', track_name, str(exc))
+            else:
+                raise
+        pred = subset_using_previous_if_missing(pred, tasks[vid_obj].labels.sorted_keys())
+        preds[vid_obj] = pred
+    return preds
 
 
 def assess_sequence(gt, pred, iou_threshold):

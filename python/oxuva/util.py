@@ -182,3 +182,7 @@ class LazyCacheCaller(object):
             self.result = self.func()
             self.evaluated = True
         return self.result
+
+
+def float2str(x):
+    return str(x).replace('.', 'd')
