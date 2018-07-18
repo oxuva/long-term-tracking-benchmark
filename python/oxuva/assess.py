@@ -333,11 +333,11 @@ def union_dataset_assessment(x, y):
 def dump_dataset_assessment_json(x, f):
     data = {
         # Convert to list of items because JSON does not support tuple as keys.
-        'totals': list(x['totals'].items()),
+        'totals': sorted((x['totals'].items()),
         # Convert to list of items because JSON does not support tuple as keys.
         # Extract elements of each QuantizedAssessment.
-        'quantized_totals': [
-            (vid_obj, value.elems) for vid_obj, value in x['quantized_totals'].items()],
+        'quantized_totals': [(vid_obj, value.elems)
+                             for vid_obj, value in sorted(x['quantized_totals'].items())],
     }
     json.dump(data, f, sort_keys=True)
 
