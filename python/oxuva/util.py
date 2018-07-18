@@ -49,7 +49,7 @@ def geometric_mean(*args):
     # assert all([x >= 0 for x in args])
     # if any([x == 0 for x in args]):
     #     return 0.
-    return np.asscalar(np.exp(np.mean(np.log(args))))
+    return np.exp(np.mean(np.log(args))).tolist()
 
 
 def cache(protocol, filename, func, makedir=True, ignore_existing=False):
