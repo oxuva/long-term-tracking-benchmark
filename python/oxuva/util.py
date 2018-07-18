@@ -46,10 +46,10 @@ def harmonic_mean(*args):
 
 
 def geometric_mean(*args):
-    assert all([x >= 0 for x in args])
-    if any([x == 0 for x in args]):
-        return 0.
-    return np.asscalar(np.exp(np.mean(np.log(args))))
+    # assert all([x >= 0 for x in args])
+    # if any([x == 0 for x in args]):
+    #     return 0.
+    return np.exp(np.mean(np.log(args))).tolist()
 
 
 def cache(protocol, filename, func, makedir=True, ignore_existing=False):
@@ -80,7 +80,8 @@ def cache(protocol, filename, func, makedir=True, ignore_existing=False):
 
 
 Protocol = collections.namedtuple('Protocol', ['dump', 'load', 'binary'])
-protocol_json = Protocol(dump=json.dump, load=json.load, binary=True)
+protocol_json = Protocol(dump=functools.partial(json.dump, sort_keys=True),
+                         load=json.load, binary=True)
 protocol_pickle = Protocol(dump=pickle.dump, load=pickle.load, binary=False)
 
 cache_json = functools.partial(cache, protocol_json)
@@ -168,3 +169,21 @@ def select_interval(series, min_time=None, max_time=None, init_time=0):
         t: x for t, x in series.items()
         if ((min_time is None or min_time <= t - init_time) and
             (max_time is None or t - init_time <= max_time))})
+
+
+class LazyCacheCaller(object):
+
+    def __init__(self, func):
+        self.func = func
+        self.evaluated = False
+        self.result = None
+
+    def __call__(self):
+        if not self.evaluated:
+            self.result = self.func()
+            self.evaluated = True
+        return self.result
+
+
+def float2str(x):
+    return str(x).replace('.', 'd')

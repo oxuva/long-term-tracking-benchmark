@@ -11,5 +11,5 @@ do
     python $repo/scripts/analyze.py plot_tpr_tnr $flags || exit 1
     python $repo/scripts/analyze.py plot_tpr_tnr_intervals $flags || exit 1
     python $repo/scripts/analyze.py plot_tpr_time $flags --max_time=300 || exit 1
-    python $repo/scripts/analyze.py plot_present_absent $flags
+    python $repo/scripts/analyze.py plot_present_absent $flags || exit 1
 done
