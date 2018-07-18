@@ -81,8 +81,8 @@ def cache(protocol, filename, func, makedir=True, ignore_existing=False):
 
 Protocol = collections.namedtuple('Protocol', ['dump', 'load', 'binary'])
 protocol_json = Protocol(dump=functools.partial(json.dump, sort_keys=True),
-                         load=json.load, binary=True)
-protocol_pickle = Protocol(dump=pickle.dump, load=pickle.load, binary=False)
+                         load=json.load, binary=False)
+protocol_pickle = Protocol(dump=pickle.dump, load=pickle.load, binary=True)
 
 cache_json = functools.partial(cache, protocol_json)
 cache_pickle = functools.partial(cache, protocol_pickle)
