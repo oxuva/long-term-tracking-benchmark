@@ -129,7 +129,7 @@ def main():
                 dataset_assessments[dataset][tracker][iou] = oxuva.cache(
                     oxuva.Protocol(dump=oxuva.dump_dataset_assessment_json,
                                    load=oxuva.load_dataset_assessment_json, binary=False),
-                    os.path.join('cache', 'assess', dataset, tracker,
+                    os.path.join('assess', dataset, tracker,
                                  'iou_{}.json'.format(oxuva.float2str(iou))),
                     lambda: oxuva.assess_dataset(tasks, get_predictions(), iou,
                                                  resolution_seconds=30),
