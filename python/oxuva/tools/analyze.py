@@ -36,7 +36,7 @@ INTERVAL_AXIS_LABEL = {
     'after': 'Frames after time (min)',
     'between': 'Frames in interval (min)',
 }
-ERRORBAR_NUM_SIGMA = 1.96
+ERRORBAR_NUM_SIGMA = 1.64485  # scipy.stats.norm.ppf(0.5 + 0.9 / 2)
 
 
 def _add_arguments(parser):
@@ -122,27 +122,37 @@ def main():
     # TODO: Is it unsafe to use float (iou) as dictionary key?
     for dataset in dataset_names:
         dataset_assessments[dataset] = {}
+        valid_trackers = []
         for tracker_ind, tracker in enumerate(trackers):
-            log_context = 'tracker {}/{} {}'.format(tracker_ind + 1, len(trackers), tracker)
-            dataset_assessments[dataset][tracker] = {}
-            # Load predictions at most once for all IOU thresholds (can be slow).
-            get_predictions = oxuva.LazyCacheCaller(
-                lambda: oxuva.load_predictions_and_select_frames(
-                    get_annotations[dataset](),
-                    os.path.join('predictions', dataset, tracker),
-                    permissive=args.permissive,
-                    log_prefix=log_context + ': '))
+            try:
+                log_context = 'tracker {}/{} {}'.format(tracker_ind + 1, len(trackers), tracker)
+                dataset_assessments[dataset][tracker] = {}
+                # Load predictions at most once for all IOU thresholds (can be slow).
+                get_predictions = oxuva.LazyCacheCaller(
+                    lambda: oxuva.load_predictions_and_select_frames(
+                        get_annotations[dataset](),
+                        os.path.join('predictions', dataset, tracker),
+                        permissive=args.permissive,
+                        log_prefix=log_context + ': '))
 
-            for iou in args.iou_thresholds:
-                logger.info('assess tracker "%s" with iou %g', tracker, iou)
-                dataset_assessments[dataset][tracker][iou] = oxuva.cache(
-                    oxuva.Protocol(dump=oxuva.dump_dataset_assessment_json,
-                                   load=oxuva.load_dataset_assessment_json, binary=False),
-                    os.path.join('assess', dataset, tracker,
-                                 'iou_{}.json'.format(oxuva.float2str(iou))),
-                    lambda: oxuva.assess_dataset(get_annotations[dataset](), get_predictions(),
-                                                 iou, resolution_seconds=30),
-                    ignore_existing=args.ignore_cache)
+                for iou in args.iou_thresholds:
+                    logger.info('assess tracker "%s" with iou %g', tracker, iou)
+                    dataset_assessments[dataset][tracker][iou] = oxuva.cache(
+                        oxuva.Protocol(dump=oxuva.dump_dataset_assessment_json,
+                                       load=oxuva.load_dataset_assessment_json, binary=False),
+                        os.path.join('assess', dataset, tracker,
+                                     'iou_{}.json'.format(oxuva.float2str(iou))),
+                        lambda: oxuva.assess_dataset(get_annotations[dataset](), get_predictions(),
+                                                     iou, resolution_seconds=30),
+                        ignore_existing=args.ignore_cache)
+                valid_trackers.append(tracker)
+            except FileNotFoundError as ex:
+                logger.warning('could not obtain assessment of tracker "%s" on dataset "%s"',
+                               tracker, dataset)
+        # TODO: This is difficult to read!
+        trackers = valid_trackers
+    if len(trackers) < 1:
+        raise RuntimeError('could not obtain assessment of any trackers')
 
     # Merge tracks from all datasets.
     # TODO: Ensure that none have same key?
@@ -176,20 +186,14 @@ def main():
 
 
 def _load_tracker_names():
-    challenges = _get_challenges(args.challenge)
-    union = {}
-    for c in challenges:
-        with open('trackers_{}.json'.format(c), 'r') as f:
-            tracker_names = json.load(f)
-        union.update(tracker_names)
-    return union
-
-
-def _get_challenges(name):
-    if name == 'all':
-        return ['constrained', 'open']
-    else:
-        return [name]
+    with open('trackers.json', 'r') as f:
+        trackers = json.load(f)
+    trackers = {key: tracker for key, tracker in trackers.items()
+                if ((args.challenge == 'all') or
+                    (args.challenge == 'constrained' and tracker['constrained']) or
+                    (args.challenge == 'open' and not tracker['constrained']))}
+    tracker_names = {key: tracker['name'] for key, tracker in trackers.items()}
+    return tracker_names
 
 
 def _get_datasets(name):
