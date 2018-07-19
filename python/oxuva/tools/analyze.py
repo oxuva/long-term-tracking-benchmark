@@ -98,61 +98,25 @@ def main():
     dataset_tasks = {
         dataset: _load_tasks(os.path.join(REPO_DIR, 'dataset', 'tasks', dataset + '.csv'))
         for dataset in dataset_names}
-    # Create functions to load tasks with annotations on demand.
-    # (Do not need annotations if using cached assessments.)
-    # TODO: Code would be easier to read using a class with lazy-cached elements as members?
-    get_annotations = {
-        dataset: oxuva.LazyCacheCaller(functools.partial(
-            _load_tasks_with_annotations,
-            os.path.join(REPO_DIR, 'dataset', 'annotations', dataset + '.csv')))
-        for dataset in dataset_names}
     # Take union of all datasets.
     tasks = {key: task for dataset in dataset_names
              for key, task in dataset_tasks[dataset].items()}
 
     tracker_names = _load_tracker_names()
+    trackers = set(tracker_names.keys())
+    dataset_assessments = {}
+    for dataset in dataset_names:
+        dataset_assessments[dataset] = _get_assessments(dataset, trackers)
+        # Take subset of trackers for which it was possible to load results.
+        trackers = set(dataset_assessments[dataset].keys())
+    if len(trackers) < 1:
+        raise RuntimeError('could not obtain assessment of any trackers')
+
     # Assign colors and markers alphabetically to achieve invariance across plots.
-    trackers = sorted(tracker_names.keys(), key=lambda s: s.lower())
+    trackers = sorted(trackers, key=lambda s: s.lower())
     color_list = _generate_colors(len(trackers))
     tracker_colors = dict(zip(trackers, color_list))
     tracker_markers = dict(zip(trackers, itertools.cycle(MARKERS)))
-
-    dataset_assessments = {}
-    # Obtain results at different IOU thresholds in order to make axes the same in all graphs.
-    # TODO: Is it unsafe to use float (iou) as dictionary key?
-    for dataset in dataset_names:
-        dataset_assessments[dataset] = {}
-        valid_trackers = []
-        for tracker_ind, tracker in enumerate(trackers):
-            try:
-                log_context = 'tracker {}/{} {}'.format(tracker_ind + 1, len(trackers), tracker)
-                dataset_assessments[dataset][tracker] = {}
-                # Load predictions at most once for all IOU thresholds (can be slow).
-                get_predictions = oxuva.LazyCacheCaller(
-                    lambda: oxuva.load_predictions_and_select_frames(
-                        get_annotations[dataset](),
-                        os.path.join('predictions', dataset, tracker),
-                        permissive=args.permissive,
-                        log_prefix=log_context + ': '))
-
-                for iou in args.iou_thresholds:
-                    logger.info('assess tracker "%s" with iou %g', tracker, iou)
-                    dataset_assessments[dataset][tracker][iou] = oxuva.cache(
-                        oxuva.Protocol(dump=oxuva.dump_dataset_assessment_json,
-                                       load=oxuva.load_dataset_assessment_json, binary=False),
-                        os.path.join('assess', dataset, tracker,
-                                     'iou_{}.json'.format(oxuva.float2str(iou))),
-                        lambda: oxuva.assess_dataset(get_annotations[dataset](), get_predictions(),
-                                                     iou, resolution_seconds=30),
-                        ignore_existing=args.ignore_cache)
-                valid_trackers.append(tracker)
-            except FileNotFoundError as ex:
-                logger.warning('could not obtain assessment of tracker "%s" on dataset "%s"',
-                               tracker, dataset)
-        # TODO: This is difficult to read!
-        trackers = valid_trackers
-    if len(trackers) < 1:
-        raise RuntimeError('could not obtain assessment of any trackers')
 
     # Merge tracks from all datasets.
     # TODO: Ensure that none have same key?
@@ -183,6 +147,55 @@ def main():
             for bootstrap in ([False, True] if args.bootstrap else [False]):
                 _plot_present_absent(assessments, trackers, iou, bootstrap,
                                      tracker_names, tracker_colors, tracker_markers)
+
+
+def _get_assessments(dataset, trackers):
+    '''
+    Args:
+        dataset: String that identifies dataset ("dev" or "test").
+        trackers: List of tracker names.
+
+    Returns:
+        Dictionary that maps [tracker][iou] to dataset assessment.
+        Only returns assessments for subset of trackers that were successful.
+    '''
+    # Create functions to load tasks with annotations on demand.
+    # (Do not need annotations if using cached assessments.)
+    # TODO: Code would be easier to read using a class with lazy-cached elements as members?
+    get_annotations = oxuva.LazyCacheCaller(functools.partial(
+        _load_tasks_with_annotations,
+        os.path.join(REPO_DIR, 'dataset', 'annotations', dataset + '.csv')))
+
+    assessments = {}
+    for tracker_ind, tracker in enumerate(trackers):
+        try:
+            log_context = 'tracker {}/{} {}'.format(tracker_ind + 1, len(trackers), tracker)
+            tracker_assessments = {}
+            # Load predictions at most once for all IOU thresholds (can be slow).
+            get_predictions = oxuva.LazyCacheCaller(
+                lambda: oxuva.load_predictions_and_select_frames(
+                    get_annotations(),
+                    os.path.join('predictions', dataset, tracker),
+                    permissive=args.permissive,
+                    log_prefix=log_context + ': '))
+            # Obtain results at all IOU thresholds in order to make axes equal in all graphs.
+            # TODO: Is it unsafe to use float (iou) as dictionary key?
+            for iou in args.iou_thresholds:
+                logger.info('assess tracker "%s" with iou %g', tracker, iou)
+                tracker_assessments[iou] = oxuva.cache(
+                    oxuva.Protocol(dump=oxuva.dump_dataset_assessment_json,
+                                   load=oxuva.load_dataset_assessment_json, binary=False),
+                    os.path.join('assess', dataset, tracker,
+                                 'iou_{}.json'.format(oxuva.float2str(iou))),
+                    lambda: oxuva.assess_dataset(get_annotations(), get_predictions(),
+                                                 iou, resolution_seconds=30),
+                    ignore_existing=args.ignore_cache)
+        except FileNotFoundError as ex:
+            logger.warning('could not obtain assessment of tracker "%s" on dataset "%s"',
+                           tracker, dataset)
+        else:
+            assessments[tracker] = tracker_assessments
+    return assessments
 
 
 def _load_tracker_names():
