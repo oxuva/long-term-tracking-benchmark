@@ -77,8 +77,10 @@ def quality_metrics(assessment):
     metrics = {}
     num_pos = assessment['TP'] + assessment['FN']
     num_neg = assessment['TN'] + assessment['FP']
-    metrics['TPR'] = np.asfarray(assessment['TP']) / num_pos
-    metrics['TNR'] = np.asfarray(assessment['TN']) / num_neg
+    with np.errstate(invalid='ignore'):
+        # Allow nan values in cases of 0 / 0.
+        metrics['TPR'] = np.asfarray(assessment['TP']) / num_pos
+        metrics['TNR'] = np.asfarray(assessment['TN']) / num_neg
     # TODO: Add some errorbars?
     metrics['GM'] = util.geometric_mean(metrics['TPR'], metrics['TNR'])
     metrics['MaxGM'] = max_geometric_mean_line(metrics['TNR'], metrics['TPR'], 1, 0)
