@@ -94,8 +94,17 @@ def main():
     logging.basicConfig(level=getattr(logging, args.loglevel.upper()))
 
     dataset_names = _get_datasets(args.data)
+    # Load tasks without annotations.
     dataset_tasks = {
-        dataset: _load_tasks(os.path.join(REPO_DIR, 'dataset', 'annotations', dataset + '.csv'))
+        dataset: _load_tasks(os.path.join(REPO_DIR, 'dataset', 'tasks', dataset + '.csv'))
+        for dataset in dataset_names}
+    # Create functions to load tasks with annotations on demand.
+    # (Do not need annotations if using cached assessments.)
+    # TODO: Code would be easier to read using a class with lazy-cached elements as members?
+    get_annotations = {
+        dataset: oxuva.LazyCacheCaller(functools.partial(
+            _load_tasks_with_annotations,
+            os.path.join(REPO_DIR, 'dataset', 'annotations', dataset + '.csv')))
         for dataset in dataset_names}
     # Take union of all datasets.
     tasks = {key: task for dataset in dataset_names
@@ -119,7 +128,7 @@ def main():
             # Load predictions at most once for all IOU thresholds (can be slow).
             get_predictions = oxuva.LazyCacheCaller(
                 lambda: oxuva.load_predictions_and_select_frames(
-                    dataset_tasks[dataset],
+                    get_annotations[dataset](),
                     os.path.join('predictions', dataset, tracker),
                     permissive=args.permissive,
                     log_prefix=log_context + ': '))
@@ -131,8 +140,8 @@ def main():
                                    load=oxuva.load_dataset_assessment_json, binary=False),
                     os.path.join('assess', dataset, tracker,
                                  'iou_{}.json'.format(oxuva.float2str(iou))),
-                    lambda: oxuva.assess_dataset(tasks, get_predictions(), iou,
-                                                 resolution_seconds=30),
+                    lambda: oxuva.assess_dataset(get_annotations[dataset](), get_predictions(),
+                                                 iou, resolution_seconds=30),
                     ignore_existing=args.ignore_cache)
 
     # Merge tracks from all datasets.
@@ -191,6 +200,13 @@ def _get_datasets(name):
 
 
 def _load_tasks(fname):
+    logger.debug('load tasks without annotations from "%s"', fname)
+    with open(fname, 'r') as fp:
+        return oxuva.load_dataset_tasks_csv(fp)
+
+
+def _load_tasks_with_annotations(fname):
+    logger.debug('load tasks with annotations from "%s"', fname)
     with open(fname, 'r') as fp:
         # if fname.endswith('.json'):
         #     tracks = json.load(fp)

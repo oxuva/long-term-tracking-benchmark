@@ -66,6 +66,7 @@ def cache(protocol, filename, func, makedir=True, ignore_existing=False):
         with open(filename, 'rb' if protocol.binary else 'r') as r:
             result = protocol.load(r)
     else:
+        logger.debug('cache file not found: %s', filename)
         dir = os.path.dirname(filename)
         if makedir and (not os.path.exists(dir)):
             os.makedirs(dir)
