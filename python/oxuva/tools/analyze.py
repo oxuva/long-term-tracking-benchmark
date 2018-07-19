@@ -20,8 +20,9 @@ import matplotlib.pyplot as plt
 
 import oxuva
 
-# <REPO_DIR>/scripts/analyze.py
-REPO_DIR = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+# <REPO_DIR>/python/oxuva/tools/analyze.py
+TOOLS_DIR = os.path.dirname(os.path.realpath(__file__))
+REPO_DIR = os.path.realpath(os.path.join(TOOLS_DIR, '..', '..', '..'))
 
 FRAME_RATE = 30
 MARKERS = ['o', 'v', '^', '<', '>', 's', 'd']  # '*'
@@ -65,6 +66,7 @@ def _add_arguments(parser):
     tpr_tnr_args.add_argument('--no_lower_bounds', dest='lower_bounds', action='store_false')
 
     subparsers = parser.add_subparsers(dest='subcommand', help='Analysis mode')
+    subparsers.required = True  # https://bugs.python.org/issue9253#msg186387
     # table: Produce a table (one column per IOU threshold)
     subparser = subparsers.add_parser('table', formatter_class=ARGS_FORMATTER, parents=[common])
     # plot_tpr_tnr: Produce a figure (one figure per IOU threshold)
