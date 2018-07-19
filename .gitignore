@@ -4,8 +4,8 @@ docs/email_form.html
 *.tgz
 dataset/images/
 dataset/annotations/test.csv
-workspace/analysis/
 workspace/cache/
+workspace/analysis/
 *.swp
 *.swo
 .DS_Store

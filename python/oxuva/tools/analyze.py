@@ -49,7 +49,6 @@ def _add_arguments(parser):
     common.add_argument('--permissive', action='store_true',
                         help='Silently exclude tracks which caused an error')
     common.add_argument('--ignore_cache', action='store_true')
-    common.add_argument('--cache_dir', default='cache/')
     common.add_argument('--iou_thresholds', nargs='+', type=float, default=[0.5],
                         help='List of IOU thresholds to use', metavar='IOU')
     common.add_argument('--no_bootstrap', dest='bootstrap', action='store_false',
@@ -121,18 +120,17 @@ def main():
             get_predictions = oxuva.LazyCacheCaller(
                 lambda: oxuva.load_predictions_and_select_frames(
                     dataset_tasks[dataset],
-                    os.path.join(REPO_DIR, 'predictions', dataset, tracker),
+                    os.path.join('predictions', dataset, tracker),
                     permissive=args.permissive,
                     log_prefix=log_context + ': '))
 
             for iou in args.iou_thresholds:
                 logger.info('assess tracker "%s" with iou %g', tracker, iou)
-                cache_file = os.path.join(
-                    dataset, 'assess', tracker, 'iou_{}.json'.format(oxuva.float2str(iou)))
                 dataset_assessments[dataset][tracker][iou] = oxuva.cache(
                     oxuva.Protocol(dump=oxuva.dump_dataset_assessment_json,
                                    load=oxuva.load_dataset_assessment_json, binary=False),
-                    os.path.join(args.cache_dir, 'analyze', cache_file),
+                    os.path.join('cache', 'assess', dataset, tracker,
+                                 'iou_{}.json'.format(oxuva.float2str(iou))),
                     lambda: oxuva.assess_dataset(tasks, get_predictions(), iou,
                                                  resolution_seconds=30),
                     ignore_existing=args.ignore_cache)
