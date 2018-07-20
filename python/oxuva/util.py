@@ -46,10 +46,14 @@ def harmonic_mean(*args):
 
 
 def geometric_mean(*args):
-    # assert all([x >= 0 for x in args])
-    # if any([x == 0 for x in args]):
-    #     return 0.
-    return np.exp(np.mean(np.log(args))).tolist()
+    with np.errstate(divide='ignore'):
+        # log(zero) leads to -inf
+        # log(negative) leads to nan
+        # log(nan) leads to nan
+        # nan + anything is nan
+        # -inf + (any finite value) is -inf
+        # exp(-inf) is 0
+        return np.exp(np.mean(np.log(args))).tolist()
 
 
 def cache(protocol, filename, func, makedir=True, ignore_existing=False):
@@ -66,6 +70,7 @@ def cache(protocol, filename, func, makedir=True, ignore_existing=False):
         with open(filename, 'rb' if protocol.binary else 'r') as r:
             result = protocol.load(r)
     else:
+        logger.debug('cache file not found: %s', filename)
         dir = os.path.dirname(filename)
         if makedir and (not os.path.exists(dir)):
             os.makedirs(dir)

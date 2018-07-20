@@ -9,6 +9,7 @@ import json
 import numpy as np
 import math
 import os
+import subprocess
 import sys
 
 import logging
@@ -20,8 +21,9 @@ import matplotlib.pyplot as plt
 
 import oxuva
 
-# <REPO_DIR>/scripts/analyze.py
-REPO_DIR = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+# <REPO_DIR>/python/oxuva/tools/analyze.py
+TOOLS_DIR = os.path.dirname(os.path.realpath(__file__))
+REPO_DIR = os.path.realpath(os.path.join(TOOLS_DIR, '..', '..', '..'))
 
 FRAME_RATE = 30
 MARKERS = ['o', 'v', '^', '<', '>', 's', 'd']  # '*'
@@ -35,26 +37,32 @@ INTERVAL_AXIS_LABEL = {
     'after': 'Frames after time (min)',
     'between': 'Frames in interval (min)',
 }
-ERRORBAR_NUM_SIGMA = 1.96
 
 
 def _add_arguments(parser):
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument('--data', default='dev', help='{dev,test,devtest}')
-    common.add_argument('--challenge', default='constrained',
-                        help='{open,constrained,all}')
+    common.add_argument('--challenge', default='open',
+                        help='Assess trackers from which challenge?',
+                        choices=['constrained', 'open', 'open_minus_constrained'])
     # common.add_argument('--verbose', '-v', action='store_true')
     common.add_argument('--loglevel', default='info', choices=['info', 'debug', 'warning'])
     common.add_argument('--permissive', action='store_true',
                         help='Silently exclude tracks which caused an error')
     common.add_argument('--ignore_cache', action='store_true')
-    common.add_argument('--cache_dir', default='cache/')
     common.add_argument('--iou_thresholds', nargs='+', type=float, default=[0.5],
                         help='List of IOU thresholds to use', metavar='IOU')
     common.add_argument('--no_bootstrap', dest='bootstrap', action='store_false',
                         help='Disable results that require bootstrap sampling')
     common.add_argument('--bootstrap_trials', type=int, default=100,
                         help='Number of trials for bootstrap sampling')
+    common.add_argument('--errorbar_size', type=float,
+                        default=1.64485,  # scipy.stats.norm.ppf(0.5 + 0.9 / 2)
+                        help='Number of standard deviations')
+    common.add_argument('--convert_to_png', action='store_true',
+                        help='Convert PDF figures to PNG for web')
+    common.add_argument('--png_resolution', type=int, default=150,
+                        help='Dots-per-inch for PNG conversion')
 
     plot_args = argparse.ArgumentParser(add_help=False)
     plot_args.add_argument('--width_inches', type=float, default=5.0)
@@ -65,6 +73,7 @@ def _add_arguments(parser):
     tpr_tnr_args.add_argument('--no_lower_bounds', dest='lower_bounds', action='store_false')
 
     subparsers = parser.add_subparsers(dest='subcommand', help='Analysis mode')
+    subparsers.required = True  # https://bugs.python.org/issue9253#msg186387
     # table: Produce a table (one column per IOU threshold)
     subparser = subparsers.add_parser('table', formatter_class=ARGS_FORMATTER, parents=[common])
     # plot_tpr_tnr: Produce a figure (one figure per IOU threshold)
@@ -93,47 +102,29 @@ def main():
     logging.basicConfig(level=getattr(logging, args.loglevel.upper()))
 
     dataset_names = _get_datasets(args.data)
+    # Load tasks without annotations.
     dataset_tasks = {
-        dataset: _load_tasks(os.path.join(REPO_DIR, 'dataset', 'annotations', dataset + '.csv'))
+        dataset: _load_tasks(os.path.join(REPO_DIR, 'dataset', 'tasks', dataset + '.csv'))
         for dataset in dataset_names}
     # Take union of all datasets.
     tasks = {key: task for dataset in dataset_names
              for key, task in dataset_tasks[dataset].items()}
 
     tracker_names = _load_tracker_names()
+    trackers = set(tracker_names.keys())
+    dataset_assessments = {}
+    for dataset in dataset_names:
+        dataset_assessments[dataset] = _get_assessments(dataset, trackers)
+        # Take subset of trackers for which it was possible to load results.
+        trackers = set(dataset_assessments[dataset].keys())
+    if len(trackers) < 1:
+        raise RuntimeError('could not obtain assessment of any trackers')
+
     # Assign colors and markers alphabetically to achieve invariance across plots.
-    trackers = sorted(tracker_names.keys(), key=lambda s: s.lower())
+    trackers = sorted(trackers, key=lambda s: s.lower())
     color_list = _generate_colors(len(trackers))
     tracker_colors = dict(zip(trackers, color_list))
     tracker_markers = dict(zip(trackers, itertools.cycle(MARKERS)))
-
-    dataset_assessments = {}
-    # Obtain results at different IOU thresholds in order to make axes the same in all graphs.
-    # TODO: Is it unsafe to use float (iou) as dictionary key?
-    for dataset in dataset_names:
-        dataset_assessments[dataset] = {}
-        for tracker_ind, tracker in enumerate(trackers):
-            log_context = 'tracker {}/{} {}'.format(tracker_ind + 1, len(trackers), tracker)
-            dataset_assessments[dataset][tracker] = {}
-            # Load predictions at most once for all IOU thresholds (can be slow).
-            get_predictions = oxuva.LazyCacheCaller(
-                lambda: oxuva.load_predictions_and_select_frames(
-                    dataset_tasks[dataset],
-                    os.path.join(REPO_DIR, 'predictions', dataset, tracker),
-                    permissive=args.permissive,
-                    log_prefix=log_context + ': '))
-
-            for iou in args.iou_thresholds:
-                logger.info('assess tracker "%s" with iou %g', tracker, iou)
-                cache_file = os.path.join(
-                    dataset, 'assess', tracker, 'iou_{}.json'.format(oxuva.float2str(iou)))
-                dataset_assessments[dataset][tracker][iou] = oxuva.cache(
-                    oxuva.Protocol(dump=oxuva.dump_dataset_assessment_json,
-                                   load=oxuva.load_dataset_assessment_json, binary=False),
-                    os.path.join(args.cache_dir, 'analyze', cache_file),
-                    lambda: oxuva.assess_dataset(tasks, get_predictions(), iou,
-                                                 resolution_seconds=30),
-                    ignore_existing=args.ignore_cache)
 
     # Merge tracks from all datasets.
     # TODO: Ensure that none have same key?
@@ -166,21 +157,64 @@ def main():
                                      tracker_names, tracker_colors, tracker_markers)
 
 
+def _get_assessments(dataset, trackers):
+    '''
+    Args:
+        dataset: String that identifies dataset ("dev" or "test").
+        trackers: List of tracker names.
+
+    Returns:
+        Dictionary that maps [tracker][iou] to dataset assessment.
+        Only returns assessments for subset of trackers that were successful.
+    '''
+    # Create functions to load tasks with annotations on demand.
+    # (Do not need annotations if using cached assessments.)
+    # TODO: Code would be easier to read using a class with lazy-cached elements as members?
+    get_annotations = oxuva.LazyCacheCaller(functools.partial(
+        _load_tasks_with_annotations,
+        os.path.join(REPO_DIR, 'dataset', 'annotations', dataset + '.csv')))
+
+    assessments = {}
+    for tracker_ind, tracker in enumerate(trackers):
+        try:
+            log_context = 'tracker {}/{} {}'.format(tracker_ind + 1, len(trackers), tracker)
+            tracker_assessments = {}
+            # Load predictions at most once for all IOU thresholds (can be slow).
+            get_predictions = oxuva.LazyCacheCaller(
+                lambda: oxuva.load_predictions_and_select_frames(
+                    get_annotations(),
+                    os.path.join('predictions', dataset, tracker),
+                    permissive=args.permissive,
+                    log_prefix=log_context + ': '))
+            # Obtain results at all IOU thresholds in order to make axes equal in all graphs.
+            # TODO: Is it unsafe to use float (iou) as dictionary key?
+            for iou in args.iou_thresholds:
+                logger.info('assess tracker "%s" with iou %g', tracker, iou)
+                tracker_assessments[iou] = oxuva.cache(
+                    oxuva.Protocol(dump=oxuva.dump_dataset_assessment_json,
+                                   load=oxuva.load_dataset_assessment_json, binary=False),
+                    os.path.join('assess', dataset, tracker,
+                                 'iou_{}.json'.format(oxuva.float2str(iou))),
+                    lambda: oxuva.assess_dataset(get_annotations(), get_predictions(),
+                                                 iou, resolution_seconds=30),
+                    ignore_existing=args.ignore_cache)
+        except FileNotFoundError as ex:
+            logger.warning('could not obtain assessment of tracker "%s" on dataset "%s": %s',
+                           tracker, dataset, ex)
+        else:
+            assessments[tracker] = tracker_assessments
+    return assessments
+
+
 def _load_tracker_names():
-    challenges = _get_challenges(args.challenge)
-    union = {}
-    for c in challenges:
-        with open('trackers_{}.json'.format(c), 'r') as f:
-            tracker_names = json.load(f)
-        union.update(tracker_names)
-    return union
-
-
-def _get_challenges(name):
-    if name == 'all':
-        return ['constrained', 'open']
-    else:
-        return [name]
+    with open('trackers.json', 'r') as f:
+        trackers = json.load(f)
+    trackers = {key: tracker for key, tracker in trackers.items()
+                if ((args.challenge == 'open') or
+                    (args.challenge == 'constrained' and tracker['constrained']) or
+                    (args.challenge == 'open_minus_constrained' and not tracker['constrained']))}
+    tracker_names = {key: tracker['name'] for key, tracker in trackers.items()}
+    return tracker_names
 
 
 def _get_datasets(name):
@@ -191,6 +225,13 @@ def _get_datasets(name):
 
 
 def _load_tasks(fname):
+    logger.debug('load tasks without annotations from "%s"', fname)
+    with open(fname, 'r') as fp:
+        return oxuva.load_dataset_tasks_csv(fp)
+
+
+def _load_tasks_with_annotations(fname):
+    logger.debug('load tasks with annotations from "%s"', fname)
     with open(fname, 'r') as fp:
         # if fname.endswith('.json'):
         #     tracks = json.load(fp)
@@ -214,7 +255,7 @@ def _print_statistics(assessments, trackers, names=None):
         for iou in args.iou_thresholds} for tracker in trackers}
     table_dir = os.path.join('analysis', args.data, args.challenge)
     _ensure_dir_exists(table_dir)
-    table_file = os.path.join(table_dir, 'table.txt')
+    table_file = os.path.join(table_dir, 'table.csv')
     logger.info('write table to %s', table_file)
     with open(table_file, 'w') as f:
         fieldnames = ['tracker'] + [
@@ -319,8 +360,8 @@ def _plot_tpr_tnr(base_name, assessments, trackers, iou_threshold, bootstrap,
             if bootstrap:
                 plot_func = functools.partial(
                     _errorbar,
-                    xerr=ERRORBAR_NUM_SIGMA * np.sqrt([stats[tracker]['TNR_var']]),
-                    yerr=ERRORBAR_NUM_SIGMA * np.sqrt([stats[tracker]['TPR_var']]),
+                    xerr=args.errorbar_size * np.sqrt([stats[tracker]['TNR_var']]),
+                    yerr=args.errorbar_size * np.sqrt([stats[tracker]['TPR_var']]),
                     capsize=3)
             else:
                 plot_func = plt.plot
@@ -410,7 +451,7 @@ def _plot_intervals(assessments, trackers, iou_threshold, bootstrap,
                 tpr_var = [s.get('TPR_var', None) for s in stats[mode][tracker]]
                 plot_func = functools.partial(
                     _errorbar,
-                    yerr=ERRORBAR_NUM_SIGMA * np.sqrt(tpr_var),
+                    yerr=args.errorbar_size * np.sqrt(tpr_var),
                     capsize=3)
             else:
                 plot_func = plt.plot
@@ -467,8 +508,8 @@ def _plot_present_absent(
         if bootstrap:
             plot_func = functools.partial(
                 _errorbar,
-                xerr=ERRORBAR_NUM_SIGMA * np.sqrt([stats_all_present[tracker]['TPR_var']]),
-                yerr=ERRORBAR_NUM_SIGMA * np.sqrt([stats_any_absent[tracker]['TPR_var']]),
+                xerr=args.errorbar_size * np.sqrt([stats_all_present[tracker]['TPR_var']]),
+                yerr=args.errorbar_size * np.sqrt([stats_any_absent[tracker]['TPR_var']]),
                 capsize=3)
         else:
             plot_func = plt.plot
@@ -537,6 +578,18 @@ def _generate_colors(n):
 def _save_fig(plot_file):
     logger.info('write plot to %s', plot_file)
     plt.savefig(plot_file)
+
+    if args.convert_to_png:
+        name, ext = os.path.splitext(plot_file)
+        if not ext.lower() == '.pdf':
+            raise ValueError('plot file does not have pdf extension: {:s}'.format(plot_file))
+        logger.debug('convert to png: %s', plot_file)
+        png_file = name + '.png'
+        try:
+            subprocess.check_call(['convert', '-density', str(args.png_resolution), plot_file,
+                                   '-quality', '90', png_file])
+        except subprocess.CalledProcessError as ex:
+            logger.warning('could not convert to png: %s', ex)
 
 
 def _plot_level_sets(n=10, num_points=100):
