@@ -52,6 +52,8 @@ def _add_arguments(parser):
     common.add_argument('--ignore_cache', action='store_true')
     common.add_argument('--iou_thresholds', nargs='+', type=float, default=[0.5],
                         help='List of IOU thresholds to use', metavar='IOU')
+    common.add_argument('--top', type=int, default=10,
+                        help='Only show top n trackers (zero to show all)')
     common.add_argument('--no_bootstrap', dest='bootstrap', action='store_false',
                         help='Disable results that require bootstrap sampling')
     common.add_argument('--bootstrap_trials', type=int, default=100,
@@ -137,23 +139,30 @@ def main():
                 (dataset_assessments[dataset][tracker][iou] for dataset in dataset_names),
                 None)
 
+    # Use simple metrics to get ranking.
+    rank_quality = {
+        tracker: oxuva.dataset_quality(assessments[tracker][0.5]['totals'], enable_bootstrap=False)
+        for tracker in trackers}
+    trackers = _sort_quality(rank_quality)
+    top_trackers = trackers[:args.top] if args.top else trackers
+
     if args.subcommand == 'table':
         _print_statistics(assessments, trackers, tracker_names)
     elif args.subcommand == 'plot_tpr_tnr':
-        _plot_tpr_tnr_overall(assessments, trackers,
+        _plot_tpr_tnr_overall(assessments, top_trackers,
                               tracker_names, tracker_colors, tracker_markers)
     elif args.subcommand == 'plot_tpr_tnr_intervals':
-        _plot_tpr_tnr_intervals(assessments, trackers,
+        _plot_tpr_tnr_intervals(assessments, top_trackers,
                                 tracker_names, tracker_colors, tracker_markers)
     elif args.subcommand == 'plot_tpr_time':
         for iou in args.iou_thresholds:
             for bootstrap in ([False, True] if args.bootstrap else [False]):
-                _plot_intervals(assessments, trackers, iou, bootstrap,
+                _plot_intervals(assessments, top_trackers, iou, bootstrap,
                                 tracker_names, tracker_colors, tracker_markers)
     elif args.subcommand == 'plot_present_absent':
         for iou in args.iou_thresholds:
             for bootstrap in ([False, True] if args.bootstrap else [False]):
-                _plot_present_absent(assessments, trackers, iou, bootstrap,
+                _plot_present_absent(assessments, top_trackers, iou, bootstrap,
                                      tracker_names, tracker_colors, tracker_markers)
 
 
@@ -297,9 +306,7 @@ def _plot_tpr_tnr_intervals(assessments, trackers,
                                                     enable_bootstrap=bootstrap,
                                                     num_trials=args.bootstrap_trials)
                      for tracker in trackers}
-            order = sorted(trackers,
-                           key=lambda t: _stats_sort_key(stats[t], bootstrap=bootstrap),
-                           reverse=True)
+            order = _sort_quality(stats, use_bootstrap_mean=bootstrap)
 
             tpr_key = 'TPR_mean' if bootstrap else 'TPR'
             # Get stats for all plots to establish axis range.
@@ -349,8 +356,7 @@ def _plot_tpr_tnr(base_name, assessments, trackers, iou_threshold, bootstrap,
                 enable_bootstrap=bootstrap, num_trials=args.bootstrap_trials)
             for tracker in trackers}
         if order is None:
-            sort_key = lambda t: _stats_sort_key(stats[t], bootstrap=bootstrap)
-            order = sorted(trackers, key=sort_key, reverse=True)
+            order = _sort_quality(stats, use_bootstrap_mean=bootstrap)
 
         plt.figure(figsize=(args.width_inches, args.height_inches))
         plt.xlabel('True Negative Rate (Absent)')
@@ -368,7 +374,7 @@ def _plot_tpr_tnr(base_name, assessments, trackers, iou_threshold, bootstrap,
                 plot_func = plt.plot
             plot_func([stats[tracker][tnr_key]], [stats[tracker][tpr_key]],
                       label=_tracker_label(names.get(tracker, tracker), include_score,
-                                           stats[tracker], bootstrap=bootstrap),
+                                           stats[tracker], use_bootstrap_mean=bootstrap),
                       color=colors.get(tracker, None),
                       marker=markers.get(tracker, None),
                       markerfacecolor='none', markeredgewidth=2, clip_on=False)
@@ -423,7 +429,7 @@ def _plot_intervals(assessments, trackers, iou_threshold, bootstrap,
                                                     enable_bootstrap=bootstrap,
                                                     num_trials=args.bootstrap_trials)
                      for tracker in trackers}
-    order = sorted(trackers, key=lambda t: _stats_sort_key(overall_stats[t]), reverse=True)
+    order = _sort_quality(overall_stats, use_bootstrap_mean=bootstrap)
 
     intervals_sec = {}
     points = {}
@@ -498,7 +504,7 @@ def _plot_present_absent(
             enable_bootstrap=bootstrap, num_trials=args.bootstrap_trials)
         for tracker in trackers}
 
-    order = sorted(trackers, key=lambda t: _stats_sort_key(stats_whole[t]), reverse=True)
+    order = _sort_quality(stats_whole)
     tpr_key = 'TPR_mean' if bootstrap else 'TPR'
     max_tpr = max(max([stats_all_present[tracker][tpr_key] for tracker in trackers]),
                   max([stats_any_absent[tracker][tpr_key] for tracker in trackers]))
@@ -607,18 +613,30 @@ def _ceil_nearest(x, step):
     return math.ceil(x / step) * step
 
 
-def _stats_sort_key(stats, bootstrap=False):
-    if bootstrap:
+def _sort_quality(quality, use_bootstrap_mean=False):
+    '''
+    Args:
+        quality: Dict that maps tracker name to quality dict.
+    '''
+    def sort_key(tracker):
+        return _quality_sort_key(quality[tracker],
+                                 use_bootstrap_mean=use_bootstrap_mean)
+
+    return sorted(quality.keys(), key=sort_key, reverse=True)
+
+
+def _quality_sort_key(stats, use_bootstrap_mean=False):
+    if use_bootstrap_mean:
         return (stats['MaxGM_mean'], stats['TPR_mean'], stats['TNR_mean'])
     else:
         return (stats['MaxGM'], stats['TPR'], stats['TNR'])
 
 
-def _tracker_label(name, include_score, stats, bootstrap):
+def _tracker_label(name, include_score, stats, use_bootstrap_mean):
     if not include_score:
         return name
-    gm_key = 'GM_mean' if bootstrap else 'GM'
-    max_gm_key = 'MaxGM_mean' if bootstrap else 'MaxGM'
+    gm_key = 'GM_mean' if use_bootstrap_mean else 'GM'
+    max_gm_key = 'MaxGM_mean' if use_bootstrap_mean else 'MaxGM'
     max_at_point = abs(stats[gm_key] - stats[max_gm_key]) <= 1e-3
     asterisk = '*' if max_at_point else ''
     return '{} ({:.2f}{})'.format(name, stats[max_gm_key], asterisk)
