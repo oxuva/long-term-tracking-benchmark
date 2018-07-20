@@ -10,8 +10,8 @@ It is divided in 4 parts.
 2. [Environment setup](https://github.com/oxuva/long-term-tracking-benchmark#2-how-to-set-up-your-environment)
 3. [Tracker setup](https://github.com/oxuva/long-term-tracking-benchmark#3-how-to-run-your-tracker) - set up your tracker to produce the raw csv results compatible with our evaluation.
 4. [Submit to evaluation server](https://github.com/oxuva/long-term-tracking-benchmark#4-how-to-use-the-evaluation-server) - compare your tracker with our paper's baselines by submitting your test set raw csv results to our evaluation system to get scores out.
-5. [Generate plots](https://github.com/oxuva/long-term-tracking-benchmark#5-how-to-generate-the-plots) - you can get papers snapshot or history of snapshot. Please refer to commit
-6. [Submit to leaderboard](https://github.com/oxuva/long-term-tracking-benchmark#6-how-to-submit-to-the-leaderboard) - submit your scores by doing a pull request to our [results page](https://github.com/oxuva/long-term-tracking-results).
+5. [Generate plots](https://github.com/oxuva/long-term-tracking-benchmark#5-how-to-generate-the-plots) - as in our ECCV18 paper
+6. [Submit to leaderboard](https://github.com/oxuva/long-term-tracking-benchmark#6-how-to-submit-your-tracker-to-the-leaderboard) - submit your scores by doing a pull request to our [results page](https://github.com/oxuva/long-term-tracking-results).
 
 ## 1. How to get the data
 Fill the form at [this page](https://docs.google.com/forms/d/e/1FAIpQLSepA_sLCMrqnZXBPnZFNmggf-MdEGa2Um-Q7pRGQt4SxvGNeg/viewform) to request both `images_dev.tar` and `images_test.tar`.
@@ -106,22 +106,20 @@ The score is only used for diagnostics, it does not affect the main evaluation o
 If the object is predicted `absent`, then the score and the rectangle will not be used.
 
 ## 4. How to use the evaluation server
-Since the annotations for the test set are secret, in order to evaluate your tracker and produce plots similar to the one in our paper you need to submit the raw prediction csv files to our [evaluation server](https://competitions.codalab.org/competitions/19529#participate), hosted on CodaLab.
+Since the annotations for the test set are secret, in order to evaluate your tracker and produce plots similar to the one in our paper you need to submit the raw prediction csv files to our [evaluation server (link todo)](https://competitions.codalab.org/competitions/19529#participate), hosted on CodaLab.
 
-- subscribe
-- join competition
-- you can experiment submitting dev set
-- submit test, notice there is a limit (TODO) (you might need to hit refresh to understand if submission succeeded)
-- download the results
+- Subscribe to CodaLab
+- Join OxUvA long-term tracking competition
+- You can experiment submitting a zip file with the results of dev set
+- When you are ready, submit a zip file with the csv results of the test set. Notice there is a limit (TODO)
+- (you might need to hit refresh to understand if submission succeeded)
+- Download the results
 
 ## 5. How to generate the plots
 
-- you can either get last SOTA snapshot from TODO or get the paper results from TODO
-- ...text below...
-- produce plots that can go on your paper
+First, get the results of other trackers to compare against. This page contains several snapshots. `eccv18` indicates the set of methods present with our paper, `<year>-<month>` are successive snapshots.
+(These files can be downloaded on the command line using [`gdrive`](https://github.com/prasmussen/gdrive).)
 
-Obtain the up-to-date predictions of other trackers on the `dev` set from [this Google drive directory](https://drive.google.com/drive/folders/1dTZE4BrHIbLx0QiPkGLfGcqryYPKdveT).
-These files can be downloaded on the command line using [`gdrive`](https://github.com/prasmussen/gdrive).
 Extract the predictions in the repository directory.
 ```bash
 cd long-term-tracking-benchmark/
@@ -171,6 +169,6 @@ Hence they are both in the "open" challenge.
 ## 6. How to submit your tracker to the leaderboard
 - Need a paper with results on it (because we need a reference and description)
 - Do a PR
-- Does not matter if it is at the top. 
-- Please do not share results post-codalab pre-pr online. (how to enforce that?)
+- Does not matter if it is at the top, it allows to other people to cite your work. 
+- (Please do not share results post-codalab pre-pr online.)
 
