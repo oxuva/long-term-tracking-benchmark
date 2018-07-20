@@ -388,7 +388,8 @@ def _plot_tpr_tnr(base_name, assessments, trackers, iou_threshold, bootstrap,
             max_tpr = max([stats[tracker][tpr_key] for tracker in trackers])
         plt.xlim(xmin=0, xmax=1)
         plt.ylim(ymin=0, ymax=_ceil_nearest(CLEARANCE * max_tpr, 0.1))
-        plt.grid(color=GRID_COLOR)
+        plt.grid(color=GRID_COLOR, clip_on=False)
+        _hide_spines()
         _legend(**legend_kwargs)
         plot_dir = os.path.join('analysis', args.data, args.challenge)
         _ensure_dir_exists(plot_dir)
@@ -471,7 +472,8 @@ def _plot_intervals(assessments, trackers, iou_threshold, bootstrap,
         plt.xlim(xmin=0, xmax=args.max_time / 60.0)
         ymax = max(max_tpr.values()) if args.same_axes else max_tpr[mode]
         plt.ylim(ymin=0, ymax=_ceil_nearest(CLEARANCE * ymax, 0.1))
-        plt.grid(color=GRID_COLOR)
+        plt.grid(color=GRID_COLOR, clip_on=False)
+        _hide_spines()
         plot_dir = os.path.join('analysis', args.data, args.challenge)
         _ensure_dir_exists(plot_dir)
         base_name = ('tpr_time_iou_{}_interval_{}'.format(oxuva.float2str(iou_threshold), mode) +
@@ -529,7 +531,8 @@ def _plot_present_absent(
             markerfacecolor='none', markeredgewidth=2, clip_on=False)
     plt.xlim(xmin=0, xmax=_ceil_nearest(CLEARANCE * max_tpr, 0.1))
     plt.ylim(ymin=0, ymax=_ceil_nearest(CLEARANCE * max_tpr, 0.1))
-    plt.grid(color=GRID_COLOR)
+    plt.grid(color=GRID_COLOR, clip_on=False)
+    _hide_spines()
     # Draw a diagonal line.
     plt.plot([0, 1], [0, 1], color=GRID_COLOR, linewidth=1, linestyle='dotted')
     plot_dir = os.path.join('analysis', args.data, args.challenge)
@@ -645,10 +648,21 @@ def _tracker_label(name, include_score, stats, use_bootstrap_mean):
 def _errorbar(*args, **kwargs):
     container = plt.errorbar(*args, **kwargs)
     # Disable clipping for caps of errorbars.
-    caplines = container[1]
+    _, caplines, barlinecols = container
     for capline in caplines:
         capline.set_clip_on(False)
-    return container
+    for barlinecol in barlinecols:
+        barlinecol.set_clip_on(False)
+    # return container
+
+
+def _hide_spines():
+    ax = plt.gca()
+    ax.spines['left'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    ax.spines['bottom'].set_visible(False)
+    plt.tick_params(axis='both', which='both', top='off', bottom='off', left='off', right='off')
 
 
 def _legend(**kwargs):
