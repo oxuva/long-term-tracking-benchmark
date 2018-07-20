@@ -29,7 +29,7 @@ FRAME_RATE = 30
 MARKERS = ['o', 'v', '^', '<', '>', 's', 'd']  # '*'
 CMAP_PREFERENCE = ['tab10', 'tab20', 'hsv']
 GRID_COLOR = '0.85'  # plt.rcParams['grid.color']
-CLEARANCE = 1.1  # Axis range is CLEARANCE * max_value, rounded up.
+CLEARANCE = 1.2  # Axis range is CLEARANCE * max_value, rounded up.
 ARGS_FORMATTER = argparse.ArgumentDefaultsHelpFormatter  # Show default values
 INTERVAL_TYPES = ['before', 'after', 'between']
 INTERVAL_AXIS_LABEL = {
@@ -251,7 +251,7 @@ def _print_statistics(assessments, trackers, names=None):
     names = names or {}
     stats = {tracker: {iou: (
         oxuva.dataset_quality(assessments[tracker][iou]['totals'],
-                              num_trials=args.bootstrap_trials))
+                              enable_bootstrap=args.bootstrap, num_trials=args.bootstrap_trials))
         for iou in args.iou_thresholds} for tracker in trackers}
     table_dir = os.path.join('analysis', args.data, args.challenge)
     _ensure_dir_exists(table_dir)
@@ -294,6 +294,7 @@ def _plot_tpr_tnr_intervals(assessments, trackers,
         for iou in args.iou_thresholds:
             # Order by performance on all frames.
             stats = {tracker: oxuva.dataset_quality(assessments[tracker][iou]['totals'],
+                                                    enable_bootstrap=bootstrap,
                                                     num_trials=args.bootstrap_trials)
                      for tracker in trackers}
             order = sorted(trackers,
@@ -306,9 +307,9 @@ def _plot_tpr_tnr_intervals(assessments, trackers,
             max_tpr = max([max([max([
                 oxuva.dataset_quality_interval(
                     assessments[tracker][iou]['quantized_totals'],
-                    num_trials=args.bootstrap_trials,
                     min_time=None if min_time is None else FRAME_RATE * min_time,
-                    max_time=None if max_time is None else FRAME_RATE * max_time)[tpr_key]
+                    max_time=None if max_time is None else FRAME_RATE * max_time,
+                    enable_bootstrap=bootstrap, num_trials=args.bootstrap_trials)[tpr_key]
                 for tracker in trackers])
                 for min_time, max_time in intervals_sec[mode]])
                 for mode in modes])
@@ -345,7 +346,7 @@ def _plot_tpr_tnr(base_name, assessments, trackers, iou_threshold, bootstrap,
                 assessments[tracker][iou_threshold]['quantized_totals'],
                 min_time=None if min_time_sec is None else FRAME_RATE * min_time_sec,
                 max_time=None if max_time_sec is None else FRAME_RATE * max_time_sec,
-                num_trials=args.bootstrap_trials)
+                enable_bootstrap=bootstrap, num_trials=args.bootstrap_trials)
             for tracker in trackers}
         if order is None:
             sort_key = lambda t: _stats_sort_key(stats[t], bootstrap=bootstrap)
@@ -382,7 +383,7 @@ def _plot_tpr_tnr(base_name, assessments, trackers, iou_threshold, bootstrap,
         plt.xlim(xmin=0, xmax=1)
         plt.ylim(ymin=0, ymax=_ceil_nearest(CLEARANCE * max_tpr, 0.1))
         plt.grid(color=GRID_COLOR)
-        plt.legend(**legend_kwargs)
+        _legend(**legend_kwargs)
         plot_dir = os.path.join('analysis', args.data, args.challenge)
         _ensure_dir_exists(plot_dir)
         _save_fig(os.path.join(plot_dir, base_name + '.pdf'))
@@ -419,6 +420,7 @@ def _plot_intervals(assessments, trackers, iou_threshold, bootstrap,
 
     # Get overall stats for order in legend.
     overall_stats = {tracker: oxuva.dataset_quality(assessments[tracker][iou_threshold]['totals'],
+                                                    enable_bootstrap=bootstrap,
                                                     num_trials=args.bootstrap_trials)
                      for tracker in trackers}
     order = sorted(trackers, key=lambda t: _stats_sort_key(overall_stats[t]), reverse=True)
@@ -469,7 +471,7 @@ def _plot_intervals(assessments, trackers, iou_threshold, bootstrap,
         base_name = ('tpr_time_iou_{}_interval_{}'.format(oxuva.float2str(iou_threshold), mode) +
                      ('_bootstrap' if bootstrap else ''))
         _save_fig(os.path.join(plot_dir, base_name + '_no_legend.pdf'))
-        plt.legend()
+        _legend()
         _save_fig(os.path.join(plot_dir, base_name + '.pdf'))
 
 
@@ -529,7 +531,7 @@ def _plot_present_absent(
     base_name = ('present_absent_iou_{}'.format(oxuva.float2str(iou_threshold)) +
                  ('_bootstrap' if bootstrap else ''))
     # _save_fig(os.path.join(plot_dir, base_name + '_no_legend.pdf'))
-    plt.legend()
+    _legend()
     _save_fig(os.path.join(plot_dir, base_name + '.pdf'))
 
 
@@ -629,6 +631,16 @@ def _errorbar(*args, **kwargs):
     for capline in caplines:
         capline.set_clip_on(False)
     return container
+
+
+def _legend(**kwargs):
+    '''Replaces plt.legend(). Excludes errorbars from legend.'''
+    # https://swdg.io/2015/errorbar-legends/
+    ax = plt.gca()
+    handles, labels = ax.get_legend_handles_labels()
+    handles = [h[0] if isinstance(h, matplotlib.container.ErrorbarContainer) else h
+               for h in handles]
+    ax.legend(handles, labels, **kwargs)
 
 
 if __name__ == '__main__':
