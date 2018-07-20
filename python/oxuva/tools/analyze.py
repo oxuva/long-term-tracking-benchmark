@@ -9,6 +9,7 @@ import json
 import numpy as np
 import math
 import os
+import subprocess
 import sys
 
 import logging
@@ -36,14 +37,14 @@ INTERVAL_AXIS_LABEL = {
     'after': 'Frames after time (min)',
     'between': 'Frames in interval (min)',
 }
-ERRORBAR_NUM_SIGMA = 1.64485  # scipy.stats.norm.ppf(0.5 + 0.9 / 2)
 
 
 def _add_arguments(parser):
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument('--data', default='dev', help='{dev,test,devtest}')
-    common.add_argument('--challenge', default='constrained',
-                        help='{open,constrained,all}')
+    common.add_argument('--challenge', default='open',
+                        help='Assess trackers from which challenge?',
+                        choices=['constrained', 'open', 'open_minus_constrained'])
     # common.add_argument('--verbose', '-v', action='store_true')
     common.add_argument('--loglevel', default='info', choices=['info', 'debug', 'warning'])
     common.add_argument('--permissive', action='store_true',
@@ -55,6 +56,13 @@ def _add_arguments(parser):
                         help='Disable results that require bootstrap sampling')
     common.add_argument('--bootstrap_trials', type=int, default=100,
                         help='Number of trials for bootstrap sampling')
+    common.add_argument('--errorbar_size', type=float,
+                        default=1.64485,  # scipy.stats.norm.ppf(0.5 + 0.9 / 2)
+                        help='Number of standard deviations')
+    common.add_argument('--convert_to_png', action='store_true',
+                        help='Convert PDF figures to PNG for web')
+    common.add_argument('--png_resolution', type=int, default=150,
+                        help='Dots-per-inch for PNG conversion')
 
     plot_args = argparse.ArgumentParser(add_help=False)
     plot_args.add_argument('--width_inches', type=float, default=5.0)
@@ -202,9 +210,9 @@ def _load_tracker_names():
     with open('trackers.json', 'r') as f:
         trackers = json.load(f)
     trackers = {key: tracker for key, tracker in trackers.items()
-                if ((args.challenge == 'all') or
+                if ((args.challenge == 'open') or
                     (args.challenge == 'constrained' and tracker['constrained']) or
-                    (args.challenge == 'open' and not tracker['constrained']))}
+                    (args.challenge == 'open_minus_constrained' and not tracker['constrained']))}
     tracker_names = {key: tracker['name'] for key, tracker in trackers.items()}
     return tracker_names
 
@@ -247,7 +255,7 @@ def _print_statistics(assessments, trackers, names=None):
         for iou in args.iou_thresholds} for tracker in trackers}
     table_dir = os.path.join('analysis', args.data, args.challenge)
     _ensure_dir_exists(table_dir)
-    table_file = os.path.join(table_dir, 'table.txt')
+    table_file = os.path.join(table_dir, 'table.csv')
     logger.info('write table to %s', table_file)
     with open(table_file, 'w') as f:
         fieldnames = ['tracker'] + [
@@ -352,8 +360,8 @@ def _plot_tpr_tnr(base_name, assessments, trackers, iou_threshold, bootstrap,
             if bootstrap:
                 plot_func = functools.partial(
                     _errorbar,
-                    xerr=ERRORBAR_NUM_SIGMA * np.sqrt([stats[tracker]['TNR_var']]),
-                    yerr=ERRORBAR_NUM_SIGMA * np.sqrt([stats[tracker]['TPR_var']]),
+                    xerr=args.errorbar_size * np.sqrt([stats[tracker]['TNR_var']]),
+                    yerr=args.errorbar_size * np.sqrt([stats[tracker]['TPR_var']]),
                     capsize=3)
             else:
                 plot_func = plt.plot
@@ -443,7 +451,7 @@ def _plot_intervals(assessments, trackers, iou_threshold, bootstrap,
                 tpr_var = [s.get('TPR_var', None) for s in stats[mode][tracker]]
                 plot_func = functools.partial(
                     _errorbar,
-                    yerr=ERRORBAR_NUM_SIGMA * np.sqrt(tpr_var),
+                    yerr=args.errorbar_size * np.sqrt(tpr_var),
                     capsize=3)
             else:
                 plot_func = plt.plot
@@ -500,8 +508,8 @@ def _plot_present_absent(
         if bootstrap:
             plot_func = functools.partial(
                 _errorbar,
-                xerr=ERRORBAR_NUM_SIGMA * np.sqrt([stats_all_present[tracker]['TPR_var']]),
-                yerr=ERRORBAR_NUM_SIGMA * np.sqrt([stats_any_absent[tracker]['TPR_var']]),
+                xerr=args.errorbar_size * np.sqrt([stats_all_present[tracker]['TPR_var']]),
+                yerr=args.errorbar_size * np.sqrt([stats_any_absent[tracker]['TPR_var']]),
                 capsize=3)
         else:
             plot_func = plt.plot
@@ -570,6 +578,18 @@ def _generate_colors(n):
 def _save_fig(plot_file):
     logger.info('write plot to %s', plot_file)
     plt.savefig(plot_file)
+
+    if args.convert_to_png:
+        name, ext = os.path.splitext(plot_file)
+        if not ext.lower() == '.pdf':
+            raise ValueError('plot file does not have pdf extension: {:s}'.format(plot_file))
+        logger.debug('convert to png: %s', plot_file)
+        png_file = name + '.png'
+        try:
+            subprocess.check_call(['convert', '-density', str(args.png_resolution), plot_file,
+                                   '-quality', '90', png_file])
+        except subprocess.CalledProcessError as ex:
+            logger.warning('could not convert to png: %s', ex)
 
 
 def _plot_level_sets(n=10, num_points=100):
