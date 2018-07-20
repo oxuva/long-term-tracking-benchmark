@@ -191,8 +191,8 @@ def _get_assessments(dataset, trackers):
                                                  iou, resolution_seconds=30),
                     ignore_existing=args.ignore_cache)
         except FileNotFoundError as ex:
-            logger.warning('could not obtain assessment of tracker "%s" on dataset "%s"',
-                           tracker, dataset)
+            logger.warning('could not obtain assessment of tracker "%s" on dataset "%s": %s',
+                           tracker, dataset, ex)
         else:
             assessments[tracker] = tracker_assessments
     return assessments
