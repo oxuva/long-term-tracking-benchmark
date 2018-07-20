@@ -1,10 +1,23 @@
-# OxUvA long-term tracking benchmark
-### (to appear at ECCV'18)
+# OxUvA long-term tracking benchmark [ECCV'18]
+**Beware**. This document is work in progress.
 
-## How to get the data
+This repository contains the code to evaluate methods on our long-term tracking benchmark, whose project page is <https://oxuva.github.io/long-term-tracking-benchmark>.
 
-Obtain `images_dev.tar` and `images_test.tar` as described on the website.
-Extract these in `dataset/`.
+The purpose of this readme is to provide a **tutorial** which hopefully will guide you safely through all the steps.
+It is divided in 4 parts.
+
+1. [https://github.com/oxuva/long-term-tracking-benchmark#how-to-get-the-data](Data) - get the dev and test splits of the OxUvA dataset.
+2. [https://github.com/oxuva/long-term-tracking-benchmark#how-to-set-up-your-environment](Environment setup)
+3. [https://github.com/oxuva/long-term-tracking-benchmark#how-to-run-your-tracker](Tracker setup) - set up your tracker to produce the raw csv results compatible with our evaluation.
+4. [https://github.com/oxuva/long-term-tracking-benchmark#how-to-use-the-evaluation-server] (Submit to the evaluation server) - compare your tracker with our paper's baselines by submitting your test set raw csv results to our evaluation system to get scores out.
+5. [https://github.com/oxuva/long-term-tracking-benchmark#how-to-generate-the-plots] (Generate plots) - you can get papers snapshot or history of snapshot. Please refer to commit
+6. [https://github.com/oxuva/long-term-tracking-benchmark#how-to-submit-to-the-leaderboard] (Submit to leaderboard) Submit your scores by doing a pull request to our [results page](https://github.com/oxuva/long-term-tracking-results).
+
+## 1. How to get the data
+Fill the form at [this page](https://docs.google.com/forms/d/e/1FAIpQLSepA_sLCMrqnZXBPnZFNmggf-MdEGa2Um-Q7pRGQt4SxvGNeg/viewform) to request both `images_dev.tar` and `images_test.tar`.
+**Note**. We provide annotations for the *dev* set (useful for example to try things out and do hyperparameter search) but not for the *test* set, which is evaluated via an evaluation server (explained later).
+
+Extract the archives in `dataset/`.
 The structure of `dataset/` should be:
 ```
 dataset/images/{subset}/{video}/{frame:06d}.jpeg
@@ -13,7 +26,7 @@ dataset/annotations/{subset}.csv
 ```
 where `{subset}` is either `dev` or `test`, `{video}` is the video ID e.g. `vid0042`, and `{frame:06d}` is the frame number starting from zero e.g. `002934`.
 
-## How to set up your environment
+## 2. How to set up your environment
 
 To install the necessary dependencies using pip:
 ```bash
@@ -27,9 +40,8 @@ export PYTHONPATH="/path/to/long-term-tracking-benchmark/python:$PYTHONPATH"
 This can be done using `source pythonpath.sh` in bash.
 This is required to run the scripts such as the OpenCV example tracker and the analysis script which generates the plots.
 
-## How to run your tracker
-
-Our toolkit does not execute your tracker.
+## 3. How to run your tracker
+**Note**. Our toolkit does not execute your tracker.
 Your tracker should output all predictions in the format described below.
 For Python trackers, we provide the utility functions `oxuva.load_dataset_tasks_csv` and `oxuva.dump_predictions_csv` to make this easy.
 See [`examples/opencv/track.py`](examples/opencv/track.py) for an example.
@@ -93,7 +105,20 @@ The fields of this CSV file are:
 The score is only used for diagnostics, it does not affect the main evaluation of the tracker.
 If the object is predicted `absent`, then the score and the rectangle will not be used.
 
-## How to generate the plots
+## 4. How to use the evaluation server
+Since the annotations for the test set are secret, in order to evaluate your tracker and produce plots similar to the one in our paper you need to submit the raw prediction csv files to our [evaluation server](https://competitions.codalab.org/competitions/19529#participate), hosted on CodaLab.
+
+- subscribe
+- join competition
+- you can experiment submitting dev set
+- submit test, notice there is a limit (TODO) (you might need to hit refresh to understand if submission succeeded)
+- download the results
+
+## 5. How to generate the plots
+
+- you can either get last SOTA snapshot from TODO or get the paper results from TODO
+- ...text below...
+- produce plots that can go on your paper
 
 Obtain the up-to-date predictions of other trackers on the `dev` set from [this Google drive directory](https://drive.google.com/drive/folders/1dTZE4BrHIbLx0QiPkGLfGcqryYPKdveT).
 These files can be downloaded on the command line using [`gdrive`](https://github.com/prasmussen/gdrive).
@@ -127,7 +152,7 @@ bash analyze_all.sh -v
 
 **Beware:** If you update the predictions, it may be necessary to wipe the `workspace/cache/analyze/` directory, or simply use the `--ignore_cache` flag.
 
-## How to add your own tracker to the evaluation
+### How to add your own tracker to the evaluation
 
 Copy the output of your tracker to `predictions/dev/my-tracker/`.
 There should be one file per object with the filename `{video}_{object}.csv`.
@@ -142,3 +167,10 @@ Otherwise, you _must_ add your tracker to `trackers_open.json`.
 **Note:** Development includes pre-training, validation and hyper-parameter search in addition to training.
 For example, SINT uses pre-trained weights and SiamFC is trained from scratch on ImageNet VID.
 Hence they are both in the "open" challenge.
+
+## 6. How to submit your tracker to the leaderboard
+- Need a paper with results on it (because we need a reference and description)
+- Do a PR
+- Does not matter if it is at the top. 
+- Please do not share results post-codalab pre-pr online. (how to enforce that?)
+
