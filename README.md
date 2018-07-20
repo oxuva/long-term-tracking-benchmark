@@ -6,12 +6,12 @@ This repository contains the code to evaluate methods on our long-term tracking 
 The purpose of this readme is to provide a **tutorial** which hopefully will guide you safely through all the steps.
 It is divided in 4 parts.
 
-1. [https://github.com/oxuva/long-term-tracking-benchmark#how-to-get-the-data](Data) - get the dev and test splits of the OxUvA dataset.
-2. [https://github.com/oxuva/long-term-tracking-benchmark#how-to-set-up-your-environment](Environment setup)
-3. [https://github.com/oxuva/long-term-tracking-benchmark#how-to-run-your-tracker](Tracker setup) - set up your tracker to produce the raw csv results compatible with our evaluation.
-4. [https://github.com/oxuva/long-term-tracking-benchmark#how-to-use-the-evaluation-server] (Submit to the evaluation server) - compare your tracker with our paper's baselines by submitting your test set raw csv results to our evaluation system to get scores out.
-5. [https://github.com/oxuva/long-term-tracking-benchmark#how-to-generate-the-plots] (Generate plots) - you can get papers snapshot or history of snapshot. Please refer to commit
-6. [https://github.com/oxuva/long-term-tracking-benchmark#how-to-submit-to-the-leaderboard] (Submit to leaderboard) Submit your scores by doing a pull request to our [results page](https://github.com/oxuva/long-term-tracking-results).
+1. [https://github.com/oxuva/long-term-tracking-benchmark#1-how-to-get-the-data](Data) - get the dev and test splits of the OxUvA dataset.
+2. [https://github.com/oxuva/long-term-tracking-benchmark#2-how-to-set-up-your-environment](Environment setup)
+3. [https://github.com/oxuva/long-term-tracking-benchmark#3-how-to-run-your-tracker](Tracker setup) - set up your tracker to produce the raw csv results compatible with our evaluation.
+4. [https://github.com/oxuva/long-term-tracking-benchmark#4-how-to-use-the-evaluation-server] (Submit to the evaluation server) - compare your tracker with our paper's baselines by submitting your test set raw csv results to our evaluation system to get scores out.
+5. [https://github.com/oxuva/long-term-tracking-benchmark#5-how-to-generate-the-plots] (Generate plots) - you can get papers snapshot or history of snapshot. Please refer to commit
+6. [https://github.com/oxuva/long-term-tracking-benchmark#6-how-to-submit-to-the-leaderboard] (Submit to leaderboard) Submit your scores by doing a pull request to our [results page](https://github.com/oxuva/long-term-tracking-results).
 
 ## 1. How to get the data
 Fill the form at [this page](https://docs.google.com/forms/d/e/1FAIpQLSepA_sLCMrqnZXBPnZFNmggf-MdEGa2Um-Q7pRGQt4SxvGNeg/viewform) to request both `images_dev.tar` and `images_test.tar`.
