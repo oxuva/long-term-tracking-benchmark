@@ -5,11 +5,11 @@ This repository provides Python code to measure the quality of a tracker's predi
 The following sections provide instructions for each stage.
 
 1. [Obtain the data](#obtain-the-data)
-1. [Set up the environment](#set-up-the-environment)
-1. [Run your tracker](#run-your-tracker)
-1. [Submit to the evaluation server](#submit-to-the-evaluation-server)
-1. [Generate the plots for a paper](#generate-the-plots-for-a-paper)
-1. [Add your tracker to the results repo](#add-your-tracker-to-the-results-repo)
+2. [Set up the environment](#set-up-the-environment)
+3. [Run your tracker](#run-your-tracker)
+4. [Submit to the evaluation server](#submit-to-the-evaluation-server)
+5. [Generate the plots for a paper](#generate-the-plots-for-a-paper)
+6. [Add your tracker to the results repo](#add-your-tracker-to-the-results-repo)
 
 The challenge is split into two tracks: "constrained" and "open".
 To be eligible for the "constrained" challenge, a tracker must use *only* the data in `annotations/ytbb_train_constrained.csv` and `annotations/dev.csv` for development.
@@ -23,7 +23,7 @@ This repo should be used for comparison against state-of-the-art.
 It is updated periodically according to a [schedule](TODO).
 
 
-## Obtain the data
+## 1. Obtain the data
 
 The ground-truth labels for the dev set can be found *in this repository* in [`dataset/annotations`](dataset/annotations).
 The tracker initialization for the dev *and* test sets can be found in [`dataset/tasks`](dataset/tasks).
@@ -81,7 +81,7 @@ The functions `oxuva.make_track_label` and `oxuva.make_frame_label` are used to 
 The function `oxuva.make_task_from_track` converts a track annotation into a tracking task with ground-truth labels.
 
 
-## Set up the environment
+## 2. Set up the environment
 
 To run the code in this repository, it is necessary to install the Python libraries listed in [`requirements.txt`](requirements.txt).
 To install these dependencies using `pip` (perhaps in a virtual environment):
@@ -99,7 +99,7 @@ source relative/path/to/long-term-tracking-benchmark/pythonpath.sh
 ```
 
 
-## Run your tracker
+## 3. Run your tracker
 
 **Note:** Unlike the VOT or OTB toolkits, our toolkit does not execute your tracker.
 Your tracker should output all predictions in the format described below.
@@ -129,7 +129,7 @@ The score is only used for diagnostics, it does not affect the main evaluation o
 If the object is predicted `absent`, then the score and the rectangle will not be used.
 
 
-## Submit to the evaluation server
+## 4. Submit to the evaluation server
 
 Since the annotations for the test set are secret, in order to evaluate your tracker and produce plots similar to the one in our paper you need to submit the raw prediction csv files to our [evaluation server (link todo)](https://competitions.codalab.org/competitions/19529#participate), hosted on CodaLab.
 
@@ -150,7 +150,7 @@ Once the submission has been successful, you can download the generated output f
 These will be used to generate the plots and submit to the results repo.
 
 
-## Generate the plots for a paper
+## 5. Generate the plots for a paper
 
 First, clone the results repo.
 ```bash
@@ -203,7 +203,7 @@ python -m oxuva.tools.analyze plot_tpr_tnr --data=dev --challenge=open
 ```
 
 
-## Add your tracker to the results repo
+## 6. Add your tracker to the results repo
 
 - Need a paper with results on it (because we need a reference and description)
 - Do a PR
