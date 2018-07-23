@@ -4,12 +4,12 @@
 This repository provides Python code to measure the quality of a tracker's predictions and generate all figures in the paper.
 The following sections provide instructions for each stage.
 
-1. [Obtain the data](#obtain-the-data)
-2. [Set up the environment](#set-up-the-environment)
-3. [Run your tracker](#run-your-tracker)
-4. [Submit to the evaluation server](#submit-to-the-evaluation-server)
-5. [Generate the plots for a paper](#generate-the-plots-for-a-paper)
-6. [Add your tracker to the results repo](#add-your-tracker-to-the-results-repo)
+1. [Obtain the data](#1-obtain-the-data)
+2. [Set up the environment](#2-set-up-the-environment)
+3. [Run your tracker](#3-run-your-tracker)
+4. [Submit to the evaluation server](#4-submit-to-the-evaluation-server)
+5. [Generate the plots for a paper](#5-generate-the-plots-for-a-paper)
+6. [Add your tracker to the results repo](#6-add-your-tracker-to-the-results-repo)
 
 The challenge is split into two tracks: "constrained" and "open".
 To be eligible for the "constrained" challenge, a tracker must use *only* the data in `annotations/ytbb_train_constrained.csv` and `annotations/dev.csv` for development.
