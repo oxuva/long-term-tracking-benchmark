@@ -67,8 +67,9 @@ def _add_arguments(parser):
                         help='Dots-per-inch for PNG conversion')
 
     plot_args = argparse.ArgumentParser(add_help=False)
-    plot_args.add_argument('--width_inches', type=float, default=5.0)
+    plot_args.add_argument('--width_inches', type=float, default=4.2)
     plot_args.add_argument('--height_inches', type=float, default=4.0)
+    plot_args.add_argument('--legend_inches', type=float, default=1.8)
 
     tpr_tnr_args = argparse.ArgumentParser(add_help=False)
     tpr_tnr_args.add_argument('--no_level_sets', dest='level_sets', action='store_false')
@@ -287,8 +288,7 @@ def _plot_tpr_tnr_overall(assessments, trackers,
                            ('_bootstrap' if bootstrap else '')),
                           assessments, trackers, iou, bootstrap,
                           names=names, colors=colors, markers=markers,
-                          min_time_sec=None, max_time_sec=None, include_score=True,
-                          legend_kwargs=dict(loc='lower left', bbox_to_anchor=(0.05, 0)))
+                          min_time_sec=None, max_time_sec=None, include_score=True)
 
 
 def _plot_tpr_tnr_intervals(assessments, trackers,
@@ -331,8 +331,7 @@ def _plot_tpr_tnr_intervals(assessments, trackers,
                     _plot_tpr_tnr(base_name, assessments, trackers, iou, bootstrap,
                                   min_time_sec=min_time_sec, max_time_sec=max_time_sec,
                                   max_tpr=max_tpr, order=order, enable_posthoc=False,
-                                  names=names, colors=colors, markers=markers,
-                                  legend_kwargs=dict(loc='upper right'))
+                                  names=names, colors=colors, markers=markers)
 
 
 def _plot_tpr_tnr(base_name, assessments, trackers, iou_threshold, bootstrap,
@@ -390,12 +389,11 @@ def _plot_tpr_tnr(base_name, assessments, trackers, iou_threshold, bootstrap,
         plt.ylim(ymin=0, ymax=_ceil_nearest(CLEARANCE * max_tpr, 0.1))
         plt.grid(color=GRID_COLOR, clip_on=False)
         _hide_spines()
-        _legend(**legend_kwargs)
         plot_dir = os.path.join('analysis', args.data, args.challenge)
         _ensure_dir_exists(plot_dir)
-        _save_fig(os.path.join(plot_dir, base_name + '.pdf'))
-        plt.gca().legend().set_visible(False)
         _save_fig(os.path.join(plot_dir, base_name + '_no_legend.pdf'))
+        _legend_outside(**legend_kwargs)
+        _save_fig(os.path.join(plot_dir, base_name + '.pdf'))
 
         # if enable_posthoc and not bootstrap:
         #     # Add posthoc-threshold curves to figure.
@@ -479,7 +477,7 @@ def _plot_intervals(assessments, trackers, iou_threshold, bootstrap,
         base_name = ('tpr_time_iou_{}_interval_{}'.format(oxuva.float2str(iou_threshold), mode) +
                      ('_bootstrap' if bootstrap else ''))
         _save_fig(os.path.join(plot_dir, base_name + '_no_legend.pdf'))
-        _legend()
+        _legend_outside()
         _save_fig(os.path.join(plot_dir, base_name + '.pdf'))
 
 
@@ -539,8 +537,8 @@ def _plot_present_absent(
     _ensure_dir_exists(plot_dir)
     base_name = ('present_absent_iou_{}'.format(oxuva.float2str(iou_threshold)) +
                  ('_bootstrap' if bootstrap else ''))
-    # _save_fig(os.path.join(plot_dir, base_name + '_no_legend.pdf'))
-    _legend()
+    _save_fig(os.path.join(plot_dir, base_name + '_no_legend.pdf'))
+    _legend_outside()
     _save_fig(os.path.join(plot_dir, base_name + '.pdf'))
 
 
@@ -662,7 +660,7 @@ def _hide_spines():
     ax.spines['right'].set_visible(False)
     ax.spines['top'].set_visible(False)
     ax.spines['bottom'].set_visible(False)
-    plt.tick_params(axis='both', which='both', top='off', bottom='off', left='off', right='off')
+    plt.tick_params(axis='both', which='both', top=False, bottom=False, left=False, right=False)
 
 
 def _legend(**kwargs):
@@ -673,6 +671,16 @@ def _legend(**kwargs):
     handles = [h[0] if isinstance(h, matplotlib.container.ErrorbarContainer) else h
                for h in handles]
     ax.legend(handles, labels, **kwargs)
+
+
+def _legend_outside(**kwargs):
+    fig = plt.gcf()
+    fig.set_size_inches(args.width_inches + args.legend_inches, args.height_inches)
+    frac = float(args.width_inches) / (args.width_inches + args.legend_inches)
+    ax = plt.gca()
+    box = ax.get_position()
+    ax.set_position([box.x0, box.y0, box.width * frac, box.height])
+    _legend(loc='center left', bbox_to_anchor=(1.03, 0.5), **kwargs)
 
 
 if __name__ == '__main__':
