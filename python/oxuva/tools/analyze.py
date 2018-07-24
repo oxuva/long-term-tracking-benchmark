@@ -29,7 +29,7 @@ FRAME_RATE = 30
 MARKERS = ['o', 'v', '^', '<', '>', 's', 'd']  # '*'
 CMAP_PREFERENCE = ['tab10', 'tab20', 'hsv']
 GRID_COLOR = '0.85'  # plt.rcParams['grid.color']
-CLEARANCE = 1.2  # Axis range is CLEARANCE * max_value, rounded up.
+CLEARANCE = 1.1  # Axis range is CLEARANCE * max_value, rounded up.
 ARGS_FORMATTER = argparse.ArgumentDefaultsHelpFormatter  # Show default values
 INTERVAL_TYPES = ['before', 'after', 'between']
 INTERVAL_AXIS_LABEL = {
@@ -69,11 +69,12 @@ def _add_arguments(parser):
     plot_args = argparse.ArgumentParser(add_help=False)
     plot_args.add_argument('--width_inches', type=float, default=4.2)
     plot_args.add_argument('--height_inches', type=float, default=4.0)
-    plot_args.add_argument('--legend_inches', type=float, default=1.8)
+    plot_args.add_argument('--legend_inches', type=float, default=1.3)
 
     tpr_tnr_args = argparse.ArgumentParser(add_help=False)
     tpr_tnr_args.add_argument('--no_level_sets', dest='level_sets', action='store_false')
     tpr_tnr_args.add_argument('--no_lower_bounds', dest='lower_bounds', action='store_false')
+    tpr_tnr_args.add_argument('--asterisk', action='store_true')
 
     subparsers = parser.add_subparsers(dest='subcommand', help='Analysis mode')
     subparsers.required = True  # https://bugs.python.org/issue9253#msg186387
@@ -639,7 +640,7 @@ def _tracker_label(name, include_score, stats, use_bootstrap_mean):
     gm_key = 'GM_mean' if use_bootstrap_mean else 'GM'
     max_gm_key = 'MaxGM_mean' if use_bootstrap_mean else 'MaxGM'
     max_at_point = abs(stats[gm_key] - stats[max_gm_key]) <= 1e-3
-    asterisk = '*' if max_at_point else ''
+    asterisk = '*' if args.asterisk and max_at_point else ''
     return '{} ({:.2f}{})'.format(name, stats[max_gm_key], asterisk)
 
 
@@ -680,7 +681,7 @@ def _legend_outside(**kwargs):
     ax = plt.gca()
     box = ax.get_position()
     ax.set_position([box.x0, box.y0, box.width * frac, box.height])
-    _legend(loc='center left', bbox_to_anchor=(1.03, 0.5), **kwargs)
+    _legend(loc='center left', bbox_to_anchor=(1.02, 0.5), **kwargs)
 
 
 if __name__ == '__main__':
