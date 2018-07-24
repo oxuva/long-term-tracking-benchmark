@@ -49,7 +49,9 @@ def _add_arguments(parser):
     common.add_argument('--loglevel', default='info', choices=['info', 'debug', 'warning'])
     common.add_argument('--permissive', action='store_true',
                         help='Silently exclude tracks which caused an error')
-    common.add_argument('--ignore_cache', action='store_true')
+    # common.add_argument('--ignore_cache', action='store_true')
+    common.add_argument('--no_use_summary', dest='use_summary', action='store_false',
+                        help='Do not load/dump assessment summaries')
     common.add_argument('--iou_thresholds', nargs='+', type=float, default=[0.5],
                         help='List of IOU thresholds to use', metavar='IOU')
     common.add_argument('--top', type=int, default=10,
@@ -201,14 +203,20 @@ def _get_assessments(dataset, trackers):
             # TODO: Is it unsafe to use float (iou) as dictionary key?
             for iou in args.iou_thresholds:
                 logger.info('assess tracker "%s" with iou %g', tracker, iou)
-                tracker_assessments[iou] = oxuva.cache(
-                    oxuva.Protocol(dump=oxuva.dump_dataset_assessment_json,
-                                   load=oxuva.load_dataset_assessment_json, binary=False),
-                    os.path.join('assess', dataset, tracker,
-                                 'iou_{}.json'.format(oxuva.float2str(iou))),
-                    lambda: oxuva.assess_dataset(get_annotations(), get_predictions(),
-                                                 iou, resolution_seconds=30),
-                    ignore_existing=args.ignore_cache)
+                assess_func = lambda: oxuva.assess_dataset(get_annotations(), get_predictions(),
+                                                           iou, resolution_seconds=30)
+                if args.use_summary:
+                    tracker_assessments[iou] = oxuva.cache(
+                        oxuva.Protocol(
+                            dump=oxuva.dump_dataset_assessment_json,
+                            load=oxuva.load_dataset_assessment_json, binary=False),
+                        os.path.join(
+                            'assess', dataset, tracker, 'iou_{}.json'.format(oxuva.float2str(iou))),
+                        assess_func)
+                else:
+                    # When it is not cached, it will include frame_assessments.
+                    # TODO: Could cache (selected frames of) predictions to file if this is slow.
+                    tracker_assessments[iou] = assess_func()
         except FileNotFoundError as ex:
             logger.warning('could not obtain assessment of tracker "%s" on dataset "%s": %s',
                            tracker, dataset, ex)
@@ -396,22 +404,31 @@ def _plot_tpr_tnr(base_name, assessments, trackers, iou_threshold, bootstrap,
         _legend_outside(**legend_kwargs)
         _save_fig(os.path.join(plot_dir, base_name + '.pdf'))
 
-        # if enable_posthoc and not bootstrap:
-        #     # Add posthoc-threshold curves to figure.
-        #     # TODO: Plot distribution of post-hoc curves when using bootstrap sampling?
-        #     plt.legend(**legend_kwargs)
-        #     for tracker in trackers:
-        #         _plot_posthoc_curve(assessments[tracker][iou_threshold],
-        #                             marker='', color=colors.get(tracker, None))
-        #     _save_fig(os.path.join(plot_dir, base_name + '_posthoc.pdf'))
-        #     plt.gca().legend().set_visible(False)
-        #     _save_fig(os.path.join(plot_dir, base_name + '_posthoc_no_legend.pdf'))
+        if enable_posthoc and not bootstrap:
+            # Add posthoc-threshold curves to figure.
+            # TODO: Plot distribution of post-hoc curves when using bootstrap sampling?
+            num_trackers = 0
+            for tracker in trackers:
+                if assessments[tracker][iou_threshold].get('frame_assessments', None) is None:
+                    logger.warning('cannot do posthoc curve for tracker "%s" at iou %g',
+                                   tracker, iou_threshold)
+                    continue
+                _plot_posthoc_curve(assessments[tracker][iou_threshold]['frame_assessments'],
+                                    marker='', color=colors.get(tracker, None))
+                num_trackers += 1
+            if num_trackers > 0:
+                _save_fig(os.path.join(plot_dir, base_name + '_posthoc_no_legend.pdf'))
+                _legend_outside(**legend_kwargs)
+                _save_fig(os.path.join(plot_dir, base_name + '_posthoc.pdf'))
+            else:
+                logger.warning('skip posthoc plot: zero trackers')
 
 
 def _plot_posthoc_curve(assessments, **kwargs):
-    frames = list(itertools.chain(*[series.values() for series in assessments.values()]))
+    frames = list(itertools.chain.from_iterable(
+        series.values() for series in assessments.values()))
     operating_points = oxuva.posthoc_threshold(frames)
-    metrics = map(oxuva.quality_metrics, operating_points)
+    metrics = list(map(oxuva.quality_metrics, operating_points))
     plt.plot([point['TNR'] for point in metrics],
              [point['TPR'] for point in metrics], **kwargs)
 
@@ -664,7 +681,7 @@ def _hide_spines():
     plt.tick_params(axis='both', which='both', top=False, bottom=False, left=False, right=False)
 
 
-def _legend(**kwargs):
+def _legend_no_errorbars(**kwargs):
     '''Replaces plt.legend(). Excludes errorbars from legend.'''
     # https://swdg.io/2015/errorbar-legends/
     ax = plt.gca()
@@ -681,7 +698,7 @@ def _legend_outside(**kwargs):
     ax = plt.gca()
     box = ax.get_position()
     ax.set_position([box.x0, box.y0, box.width * frac, box.height])
-    _legend(loc='center left', bbox_to_anchor=(1.02, 0.5), **kwargs)
+    _legend_no_errorbars(loc='center left', bbox_to_anchor=(1.02, 0.5), **kwargs)
 
 
 if __name__ == '__main__':

@@ -305,7 +305,7 @@ def max_geometric_mean_line(x1, y1, x2, y2):
     return max([h(th) for th in candidates])
 
 
-def make_dataset_assessment(totals, quantized_totals):
+def make_dataset_assessment(totals, quantized_totals, frame_assessments=None):
     '''Sufficient to produce all plots.
 
     This is what will be returned to the user by the evaluation server.
@@ -313,6 +313,7 @@ def make_dataset_assessment(totals, quantized_totals):
     return {
         'totals': totals,
         'quantized_totals': quantized_totals,
+        'frame_assessments': frame_assessments,  # Ignored by dump_xxx functions!
     }
 
 
@@ -364,16 +365,19 @@ def assess_dataset(tasks, predictions, iou_threshold, resolution_seconds=30):
     Returns:
         Enough information to produce the plots.
     '''
-    assessments = dataset.VideoObjectDict({
+    frame_assessments = dataset.VideoObjectDict({
         key: assess_sequence(tasks[key].labels, predictions[key], iou_threshold)
         for key in tasks.keys()})
     return make_dataset_assessment(
         totals=dataset.VideoObjectDict({
-            key: assessment_sum(assessments[key].values()) for key in assessments.keys()}),
+            key: assessment_sum(frame_assessments[key].values())
+            for key in frame_assessments.keys()}),
         quantized_totals=dataset.VideoObjectDict({
-            key: quantize_sequence_assessment(assessments[key], init_time=tasks[key].init_time,
+            key: quantize_sequence_assessment(frame_assessments[key],
+                                              init_time=tasks[key].init_time,
                                               resolution=(FRAME_RATE * resolution_seconds))
-            for key in assessments.keys()}))
+            for key in frame_assessments.keys()}),
+        frame_assessments=frame_assessments)
 
 
 class QuantizedAssessment(object):
