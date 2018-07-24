@@ -293,11 +293,13 @@ def _plot_tpr_tnr_overall(assessments, trackers,
 
     for iou in args.iou_thresholds:
         for bootstrap in bootstrap_modes:
-            _plot_tpr_tnr(('tpr_tnr_iou_' + oxuva.float2str(iou) +
-                           ('_bootstrap' if bootstrap else '')),
-                          assessments, trackers, iou, bootstrap,
-                          names=names, colors=colors, markers=markers,
-                          min_time_sec=None, max_time_sec=None, include_score=True)
+            for posthoc in ([False] if bootstrap else [False, True]):
+                _plot_tpr_tnr(('tpr_tnr_iou_' + oxuva.float2str(iou) +
+                               ('_posthoc' if posthoc else '') +
+                               ('_bootstrap' if bootstrap else '')),
+                              assessments, trackers, iou, bootstrap, posthoc,
+                              names=names, colors=colors, markers=markers,
+                              min_time_sec=None, max_time_sec=None, include_score=True)
 
 
 def _plot_tpr_tnr_intervals(assessments, trackers,
@@ -337,15 +339,15 @@ def _plot_tpr_tnr_intervals(assessments, trackers,
                          'interval_{}_{}'.format(oxuva.float2str(min_time_sec),
                                                  oxuva.float2str(max_time_sec))] +
                         (['bootstrap'] if bootstrap else []))
-                    _plot_tpr_tnr(base_name, assessments, trackers, iou, bootstrap,
+                    _plot_tpr_tnr(base_name, assessments, trackers, iou, bootstrap, posthoc=False,
                                   min_time_sec=min_time_sec, max_time_sec=max_time_sec,
-                                  max_tpr=max_tpr, order=order, enable_posthoc=False,
+                                  max_tpr=max_tpr, order=order,
                                   names=names, colors=colors, markers=markers)
 
 
-def _plot_tpr_tnr(base_name, assessments, trackers, iou_threshold, bootstrap,
+def _plot_tpr_tnr(base_name, assessments, trackers, iou_threshold, bootstrap, posthoc,
                   min_time_sec=None, max_time_sec=None, include_score=False,
-                  max_tpr=None, order=None, enable_posthoc=True,
+                  max_tpr=None, order=None,
                   names=None, colors=None, markers=None, legend_kwargs=None):
     names = names or {}
     colors = colors or {}
@@ -371,6 +373,7 @@ def _plot_tpr_tnr(base_name, assessments, trackers, iou_threshold, bootstrap,
         plt.ylabel('True Positive Rate (Present)')
         if args.level_sets:
             _plot_level_sets()
+
         for tracker in order:
             if bootstrap:
                 plot_func = functools.partial(
@@ -386,12 +389,28 @@ def _plot_tpr_tnr(base_name, assessments, trackers, iou_threshold, bootstrap,
                       color=colors.get(tracker, None),
                       marker=markers.get(tracker, None),
                       markerfacecolor='none', markeredgewidth=2, clip_on=False)
-
             if args.lower_bounds:
                 plt.plot(
                     [stats[tracker][tnr_key], 1], [stats[tracker][tpr_key], 0],
                     color=colors.get(tracker, None),
                     linestyle='dashed', marker='')
+
+        if posthoc:
+            num_posthoc = 0
+            for tracker in order:
+                # Add posthoc-threshold curves to figure.
+                # TODO: Plot distribution of post-hoc curves when using bootstrap sampling?
+                if assessments[tracker][iou_threshold].get('frame_assessments', None) is None:
+                    logger.warning('cannot do posthoc curve for tracker "%s" at iou %g',
+                                   tracker, iou_threshold)
+                else:
+                    _plot_posthoc_curve(assessments[tracker][iou_threshold]['frame_assessments'],
+                                        marker='', color=colors.get(tracker, None))
+                    num_posthoc += 1
+            if num_posthoc == 0:
+                logger.warning('skip posthoc plot: zero trackers')
+                return
+
         if max_tpr is None:
             max_tpr = max([stats[tracker][tpr_key] for tracker in trackers])
         plt.xlim(xmin=0, xmax=1)
@@ -403,25 +422,6 @@ def _plot_tpr_tnr(base_name, assessments, trackers, iou_threshold, bootstrap,
         _save_fig(os.path.join(plot_dir, base_name + '_no_legend.pdf'))
         _legend_outside(**legend_kwargs)
         _save_fig(os.path.join(plot_dir, base_name + '.pdf'))
-
-        if enable_posthoc and not bootstrap:
-            # Add posthoc-threshold curves to figure.
-            # TODO: Plot distribution of post-hoc curves when using bootstrap sampling?
-            num_trackers = 0
-            for tracker in trackers:
-                if assessments[tracker][iou_threshold].get('frame_assessments', None) is None:
-                    logger.warning('cannot do posthoc curve for tracker "%s" at iou %g',
-                                   tracker, iou_threshold)
-                    continue
-                _plot_posthoc_curve(assessments[tracker][iou_threshold]['frame_assessments'],
-                                    marker='', color=colors.get(tracker, None))
-                num_trackers += 1
-            if num_trackers > 0:
-                _save_fig(os.path.join(plot_dir, base_name + '_posthoc_no_legend.pdf'))
-                _legend_outside(**legend_kwargs)
-                _save_fig(os.path.join(plot_dir, base_name + '_posthoc.pdf'))
-            else:
-                logger.warning('skip posthoc plot: zero trackers')
 
 
 def _plot_posthoc_curve(assessments, **kwargs):
