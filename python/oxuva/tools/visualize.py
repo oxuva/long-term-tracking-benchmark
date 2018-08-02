@@ -3,7 +3,9 @@ from __future__ import division
 from __future__ import print_function
 
 import argparse
+import contextlib
 import os
+import shutil
 import subprocess
 import tempfile
 from PIL import Image, ImageDraw, ImageColor, ImageFont
@@ -51,13 +53,12 @@ def main():
         if os.path.exists(video_file):
             logger.debug('skip %s %s: already exists', vid, obj)
             continue
-        predictions_file = os.path.join(predictions_dir, '{}_{}.csv'.format(vid, obj))
-        with open(predictions_file, 'r') as fp:
-            predictions = oxuva.load_predictions_csv(fp)
-
-        image_file_func = lambda t: os.path.join(images_dir, vid, '{:06d}.jpeg'.format(t))
-        output_file = os.path.join(output_dir, '{}_{}.mp4'.format(vid, obj))
         try:
+            predictions_file = os.path.join(predictions_dir, '{}_{}.csv'.format(vid, obj))
+            with open(predictions_file, 'r') as fp:
+                predictions = oxuva.load_predictions_csv(fp)
+            image_file_func = lambda t: os.path.join(images_dir, vid, '{:06d}.jpeg'.format(t))
+            output_file = os.path.join(output_dir, '{}_{}.mp4'.format(vid, obj))
             _visualize_video(task, predictions, image_file_func, output_file)
         except (IOError, subprocess.CalledProcessError) as ex:
             logger.warning('could not visualize %s %s: %s', vid, obj, ex)
@@ -67,31 +68,31 @@ def _visualize_video(task, predictions, image_file_func, output_file):
     times = list(range(task.init_time, task.last_time + 1))
     predictions = oxuva.subset_using_previous_if_missing(predictions, times[1:])
 
-    tmp_dir = tempfile.mkdtemp(prefix='tmp-visualize-')
-    logger.debug('write image files to %s', tmp_dir)
-    # TODO: Delete temporary directory?
-    pattern = os.path.join(tmp_dir, '%06d.jpeg')  # Messy but used by ffmpeg.
+    with _make_temp_dir(prefix='tmp-visualize-') as tmp_dir:
+        logger.debug('write image files to %s', tmp_dir)
+        # TODO: Delete temporary directory?
+        pattern = os.path.join(tmp_dir, '%06d.jpeg')  # Messy but used by ffmpeg.
 
-    for i, t in enumerate(times):
-        im = Image.open(image_file_func(t))
-        draw = ImageDraw.Draw(im)
-        if t == task.init_time:
-            # Draw initial rectangle.
-            draw.rectangle(_pil_rect(task.init_rect, im.size), outline=_get_color('green'))
-        else:
-            # Draw predicted rectangle.
-            draw.rectangle(_pil_rect(predictions[t], im.size), outline=_get_color('yellow'))
-        del draw
-        im.save(pattern % i)
+        for i, t in enumerate(times):
+            im = Image.open(image_file_func(t))
+            draw = ImageDraw.Draw(im)
+            if t == task.init_time:
+                # Draw initial rectangle.
+                draw.rectangle(_pil_rect(task.init_rect, im.size), outline=_get_color('green'))
+            else:
+                # Draw predicted rectangle.
+                draw.rectangle(_pil_rect(predictions[t], im.size), outline=_get_color('yellow'))
+            del draw
+            im.save(pattern % i)
 
-    # TODO: Make video with ffmpeg.
-    tmp_output_file = _tmp_name(output_file)
-    command = _ffmpeg_command(['-i', pattern,
-                               '-r', '30',  # fps
-                               '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
-                               tmp_output_file])
-    subprocess.check_call(command)
-    os.rename(tmp_output_file, output_file)
+        # TODO: Make video with ffmpeg.
+        tmp_output_file = _tmp_name(output_file)
+        command = _ffmpeg_command(['-i', pattern,
+                                   '-r', '30',  # fps
+                                   '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
+                                   tmp_output_file])
+        subprocess.check_call(command)
+        os.rename(tmp_output_file, output_file)
 
 
 def _pil_rect(rect, size_xy):
@@ -141,6 +142,15 @@ def _ffmpeg_command(args):
 def _tmp_name(fname):
     head, tail = os.path.split(fname)
     return os.path.join(head, 'tmp_' + tail)
+
+
+@contextlib.contextmanager
+def _make_temp_dir(*args, **kwargs):
+    temp_dir = tempfile.mkdtemp(*args, **kwargs)
+    try:
+        yield temp_dir
+    finally:
+        shutil.rmtree(temp_dir)
 
 
 if __name__ == '__main__':
