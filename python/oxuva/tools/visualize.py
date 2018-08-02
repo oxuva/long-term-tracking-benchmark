@@ -44,13 +44,13 @@ def main():
     with open(tasks_file, 'r') as fp:
         tasks = oxuva.load_dataset_tasks_csv(fp)
 
-    for i, (key, task) in enumerate(tasks.items()):
+    for i, (key, task) in enumerate(sorted(tasks.items())):
         vid, obj = key
         logger.info('task %d/%d: (%s, %s)', i + 1, len(tasks), vid, obj)
-        # video_file = os.path.join(output_dir, '{}_{}.mp4'.format(vid, obj))
-        # if os.path.exists(video_file):
-        #     logger.debug('skip %s %s: already exists', vid, obj)
-        #     continue
+        video_file = os.path.join(output_dir, '{}_{}.mp4'.format(vid, obj))
+        if os.path.exists(video_file):
+            logger.debug('skip %s %s: already exists', vid, obj)
+            continue
         predictions_file = os.path.join(predictions_dir, '{}_{}.csv'.format(vid, obj))
         with open(predictions_file, 'r') as fp:
             predictions = oxuva.load_predictions_csv(fp)
