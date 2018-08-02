@@ -2,10 +2,10 @@
 docs/email_form.html
 *.tar
 *.tgz
-dataset/images/
+dataset/images
 dataset/annotations/test.csv
-workspace/cache/
-workspace/analysis/
+workspace/cache
+workspace/analysis
 *.swp
 *.swo
 .DS_Store
