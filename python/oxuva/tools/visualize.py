@@ -39,7 +39,7 @@ def main():
     predictions_dir = os.path.join('predictions', args.data, args.tracker)
     output_dir = os.path.join('visualize', args.data, args.tracker)
     if not os.path.exists(output_dir):
-        os.makedirs(output_dir, 0755)
+        os.makedirs(output_dir, 0o755)
 
     with open(tasks_file, 'r') as fp:
         tasks = oxuva.load_dataset_tasks_csv(fp)
