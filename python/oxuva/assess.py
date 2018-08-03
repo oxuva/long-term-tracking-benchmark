@@ -211,7 +211,7 @@ def assess_frame(gt, pred, iou_threshold):
                              num_present=(1 if gt['present'] else 0),
                              num_absent=(0 if gt['present'] else 1))
     if gt['present']:
-        if pred['present'] and iou(gt, pred) >= iou_threshold:
+        if pred['present'] and iou_clip(gt, pred) >= iou_threshold:
             result['TP'] += 1
         else:
             result['FN'] += 1
@@ -223,6 +223,13 @@ def assess_frame(gt, pred, iou_threshold):
     if 'score' in pred:
         result['score'] = pred['score']
     return result
+
+
+def iou_clip(a, b):
+    bounds = unit_rect()
+    a = intersect(a, bounds)
+    b = intersect(b, bounds)
+    return iou(a, b)
 
 
 def iou(a, b):
@@ -246,6 +253,10 @@ def intersect(a, b):
         'xmax': min(a['xmax'], b['xmax']),
         'ymax': min(a['ymax'], b['ymax']),
     }
+
+
+def unit_rect():
+    return {'xmin': 0.0, 'ymin': 0.0, 'xmax': 1.0, 'ymax': 1.0}
 
 
 def posthoc_threshold(assessments):
