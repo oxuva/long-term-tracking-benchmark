@@ -1,7 +1,7 @@
 # OxUvA long-term tracking benchmark [ECCV'18]
 **Beware**. This document is a work in progress.
 
-This repository provides Python code to measure the quality of a tracker's predictions and generate all figures in the paper.
+This repository provides Python code to measure the quality of a tracker's predictions and generate all figures of the paper.
 The following sections provide instructions for each stage.
 
 1. [Obtain the data](#1-obtain-the-data)
@@ -14,7 +14,8 @@ The following sections provide instructions for each stage.
 The challenge is split into two tracks: "constrained" and "open".
 To be eligible for the "constrained" challenge, a tracker must use *only* the data in `annotations/ytbb_train_constrained.csv` and `annotations/dev.csv` for development.
 All other trackers must enter the "open" challenge.
-**Note:** Development includes pre-training, validation and hyper-parameter search in addition to training.
+
+**Note:** With *development* we intend, in addition to training, also pre-training, validation and hyper-parameter search.
 For example, SINT uses pre-trained weights and SiamFC is trained from scratch on ImageNet VID.
 Hence they are both in the "open" challenge.
 
@@ -101,7 +102,7 @@ source relative/path/to/long-term-tracking-benchmark/pythonpath.sh
 
 ## 3. Run your tracker
 
-**Note:** Unlike the VOT or OTB toolkits, our toolkit does not execute your tracker.
+**Note:** Unlike the VOT or OTB toolkits, ours does not execute your tracker.
 Your tracker should output all predictions in the format described below.
 For Python trackers, we provide the utility functions `oxuva.load_dataset_tasks_csv` and `oxuva.dump_predictions_csv` to make this easy.
 See [`examples/opencv/track.py`](examples/opencv/track.py) for an example.
@@ -131,7 +132,7 @@ If the object is predicted `absent`, then the score and the rectangle will not b
 
 ## 4. Submit to the evaluation server
 
-Since the annotations for the test set are secret, in order to evaluate your tracker and produce plots similar to the one in our paper you need to submit the raw prediction csv files to our [evaluation server (link todo)](https://competitions.codalab.org/competitions/19529#participate), hosted on CodaLab.
+Since the annotations for the test set are secret, in order to evaluate your tracker and produce plots similar to the one in our paper you need to submit the raw prediction csv files to [our evaluation server](https://competitions.codalab.org/competitions/19529#participate), hosted on CodaLab.
 
 First, create a CodaLab account (if you do not already have one) and request to join the OxUvA competition.
 Note that the CodaLab account is per human, not per tracker.
