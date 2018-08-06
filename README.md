@@ -159,7 +159,9 @@ The tag `eccv18` indicates the set of methods in our original paper, and success
 ```bash
 git checkout 2018-07
 ```
+
 You can state in your paper which tag you are comparing against.
+You are not required to compared against the most recent state-of-the-art when writing a paper, but clearly the most recent the better, as your results will be more convincing.
 
 Add an entry for your tracker to `trackers.json`.
 You must specify a human-readable name for your tracker, and whether your tracker is eligible for the constrained-data challenge.
@@ -198,7 +200,8 @@ Similarly, to just generate the main figure, use:
 ```bash
 python -m oxuva.tools.analyze plot_tpr_tnr --data=dev --challenge=open
 ```
-
+**Note:** please do *not* put the dev set plots in the paper.
+Trackers should be compared using the test set, for which the annotations are not available.
 
 ## 6. Add your tracker to the results page
 
