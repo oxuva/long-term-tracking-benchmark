@@ -1,5 +1,5 @@
 # OxUvA long-term tracking benchmark [ECCV'18]
-**Beware**. This document is a work in progress.
+**Note:** if, while reading this tutorial, you are stuck somewhere or you are unsure you are interpreting the instructions correctly, do not hesitate to open an issue here on GitHub.
 
 This repository provides Python code to measure the quality of a tracker's predictions and generate all figures of the paper.
 The following sections provide instructions for each stage.
@@ -21,7 +21,7 @@ Hence they are both in the "open" challenge.
 
 The results of all *citeable* trackers are maintained in a [results repo](https://github.com/oxuva/long-term-tracking-results/).
 This repo should be used for comparison against state-of-the-art.
-It is updated periodically according to a [schedule](TODO).
+It is updated periodically according to a [schedule](https://docs.google.com/document/d/1BtoMzxMGfKMM7DtYOm44dXNr18HrG5CqN9cyxDAem-M/edit).
 
 
 ## 1. Obtain the data
@@ -206,8 +206,16 @@ python -m oxuva.tools.analyze plot_tpr_tnr --data=dev --challenge=open
 
 ## 6. Add your tracker to the results repo
 
-- Need a paper with results on it (because we need a reference and description)
-- Do a PR
-- Does not matter if it is at the top, it allows to other people to cite your work. 
-- (Please do not share results post-codalab pre-pr online.)
+Separately from the CodaLab evaluation server, we are maintaining a results page/repository ([updated roughly once a month](https://docs.google.com/document/d/1BtoMzxMGfKMM7DtYOm44dXNr18HrG5CqN9cyxDAem-M/edit)) that reflects the state-of-the-art on our dataset.
+
+In order to have your tracker added to the plots, you need to:
+
+1) Have completed all the previous points and produced the test set plots of your tracker.
+2) Have a paper which described your tracker. It does not need to be a peer-reviewed conference - arXiv is fine, we just need a *citeable* method.
+3) Do a pull request to the results repository, containing everything we need to update the plots. In the comment section, please include a) the name of your method b) the paper describing it and c) if it qualifies for the open or constrained challenge. *TODO*: detail which files to include in the PR.
+
+**Note**: if your method does not make it to the top, don't be shy. There are two benefits of submitting not top performing trackers: a) for the community, it is important to have a broader picture of what is being tried b) for you, it will increase your chances of having your paper read and cited.
+
+
+
 
