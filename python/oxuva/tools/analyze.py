@@ -217,7 +217,7 @@ def _get_assessments(dataset, trackers):
                     # When it is not cached, it will include frame_assessments.
                     # TODO: Could cache (selected frames of) predictions to file if this is slow.
                     tracker_assessments[iou] = assess_func()
-        except FileNotFoundError as ex:
+        except IOError as ex:
             logger.warning('could not obtain assessment of tracker "%s" on dataset "%s": %s',
                            tracker, dataset, ex)
         else:
@@ -317,7 +317,7 @@ def _plot_tpr_tnr_intervals(assessments, trackers,
                                                     enable_bootstrap=bootstrap,
                                                     num_trials=args.bootstrap_trials)
                      for tracker in trackers}
-            order = _sort_quality(stats, use_bootstrap_mean=bootstrap)
+            order = _sort_quality(stats, use_bootstrap_mean=False)
 
             tpr_key = 'TPR_mean' if bootstrap else 'TPR'
             # Get stats for all plots to establish axis range.
@@ -366,7 +366,7 @@ def _plot_tpr_tnr(base_name, assessments, trackers, iou_threshold, bootstrap, po
                 enable_bootstrap=bootstrap, num_trials=args.bootstrap_trials)
             for tracker in trackers}
         if order is None:
-            order = _sort_quality(stats, use_bootstrap_mean=bootstrap)
+            order = _sort_quality(stats, use_bootstrap_mean=False)
 
         plt.figure(figsize=(args.width_inches, args.height_inches))
         plt.xlabel('True Negative Rate (Absent)')
@@ -385,7 +385,7 @@ def _plot_tpr_tnr(base_name, assessments, trackers, iou_threshold, bootstrap, po
                 plot_func = plt.plot
             plot_func([stats[tracker][tnr_key]], [stats[tracker][tpr_key]],
                       label=_tracker_label(names.get(tracker, tracker), include_score,
-                                           stats[tracker], use_bootstrap_mean=bootstrap),
+                                           stats[tracker], use_bootstrap_mean=False),
                       color=colors.get(tracker, None),
                       marker=markers.get(tracker, None),
                       markerfacecolor='none', markeredgewidth=2, clip_on=False)
@@ -446,7 +446,7 @@ def _plot_intervals(assessments, trackers, iou_threshold, bootstrap,
                                                     enable_bootstrap=bootstrap,
                                                     num_trials=args.bootstrap_trials)
                      for tracker in trackers}
-    order = _sort_quality(overall_stats, use_bootstrap_mean=bootstrap)
+    order = _sort_quality(overall_stats, use_bootstrap_mean=False)
 
     intervals_sec = {}
     points = {}
