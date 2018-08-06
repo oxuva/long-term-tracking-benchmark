@@ -203,7 +203,7 @@ Similarly, to just generate the main figure, use:
 python -m oxuva.tools.analyze plot_tpr_tnr --data=dev --challenge=open
 ```
 **Note:** please do *not* put the dev set plots in the paper without the test set.
-In general, trackers should be compared using the test set.
+In general, comparison statements of the type *A is better than B* should be done using the test set.
 
 ## 6. Add your tracker to the results page
 
