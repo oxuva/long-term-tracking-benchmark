@@ -130,7 +130,7 @@ If the object is predicted `absent`, then the score and the rectangle will not b
 
 ## 4. Submit to the evaluation server
 
-Since the annotations for the test set are secret, in order to evaluate your tracker and produce plots similar to the one in our paper you need to submit the raw prediction csv files to [our evaluation server](https://competitions.codalab.org/competitions/19529#participate), hosted on CodaLab.
+Since the annotations for the test set are secret, in order to evaluate your tracker and produce plots similar to the one in our paper you need to submit the raw prediction csv files to the [evaluation server](https://competitions.codalab.org/competitions/19529#participate), hosted on CodaLab.
 
 First, create a CodaLab account (if you do not already have one) and request to join the OxUvA competition.
 Note that the CodaLab account is per human, not per tracker.
@@ -147,7 +147,7 @@ If a submission encounters an error (for example, a missing prediction file), yo
 Once the submission has been successful, you can download the generated output files.
 These will be used to generate the plots and submit to the results repo.
 
-**Note:** you will notice that the CodaLab challenge shows a leaderboard with usernames and scores. You can safely ignore it. What matters for comparison are the official plots (point 5 of this tutorial) and the state-of-the-art snapshot of our results reposityory (point 6).
+**Note:** you will notice that the CodaLab challenge shows a leaderboard with usernames and scores. You can safely ignore it. What matters are the official plots (point 5 of this tutorial) and the state-of-the-art snapshot of our results reposityory (point 6).
 
 ## 5. Generate the plots for a paper
 
@@ -156,14 +156,14 @@ First, clone the results repo.
 git clone https://github.com/oxuva/long-term-tracking-results.git
 cd long-term-tracking-results
 ```
-This repo contains several snapshots of the past state-of-the-art as git tags.
+This repo contains several snapshots of the past state-of-the-art as git tags (*TODO* generate tags).
 The tag `eccv18` indicates the set of methods in our original paper, and successive tags are of the form `{year}-{month:02d}`, for example:
 ```bash
 git checkout 2018-07
 ```
 
 You can state in your paper which tag you are comparing against.
-You are not required to compared against the most recent state-of-the-art when writing a paper, but clearly the most recent the better, as your results will be more convincing.
+When writing a paper, you are not required to compare against the most recent state-of-the-art... but clearly the most recent the better, as your results will be more convincing.
 
 Add an entry for your tracker to `trackers.json`.
 You must specify a human-readable name for your tracker, and whether your tracker is eligible for the constrained-data challenge.
@@ -203,15 +203,15 @@ Similarly, to just generate the main figure, use:
 python -m oxuva.tools.analyze plot_tpr_tnr --data=dev --challenge=open
 ```
 **Note:** please do *not* put the dev set plots in the paper.
-Trackers should be compared using the test set, for which the annotations are not available.
+Trackers should be compared using the test set.
 
 ## 6. Add your tracker to the results page
 
-Separately from the CodaLab evaluation server, we are maintaining a [results page/repository](https://github.com/oxuva/long-term-tracking-results) that reflects the state-of-the-art on our dataset.
+Separately from the evaluation server, we are maintaining a [results page/repository](https://github.com/oxuva/long-term-tracking-results) that reflects the state-of-the-art on our dataset.
 
 In order to have your tracker added to the plots, you need to:
 
-1) Have completed all the previous points and produced the test set plots of your tracker.
+1) Have completed all the previous points and produced the *test set plots of your tracker.
 2) Have a paper which described your tracker. It does not need to be a peer-reviewed conference - arXiv is fine, we just need a *citeable* method.
 3) Do a pull request to the results repository, containing everything we need to update the plots. In the comment section, please include a) the name of your method b) the paper describing it and c) if it qualifies for the open or constrained challenge and (optional) d) a (very) short description of your method. *TODO*: detail which files to include in the PR.
 4) The organizers will manually review your request according to [this schedule](https://docs.google.com/document/d/1BtoMzxMGfKMM7DtYOm44dXNr18HrG5CqN9cyxDAem-M/edit).
