@@ -1,7 +1,7 @@
 # OxUvA long-term tracking benchmark [ECCV'18]
-**Beware**. This document is a work in progress.
+**Note:** *if, while reading this tutorial, you are stuck somewhere or you are unsure you are interpreting the instructions correctly, do not hesitate to open an issue here on GitHub.*
 
-This repository provides Python code to measure the quality of a tracker's predictions and generate all figures in the paper.
+This repository provides Python code to measure the quality of a tracker's predictions and generate all figures of the paper.
 The following sections provide instructions for each stage.
 
 1. [Obtain the data](#1-obtain-the-data)
@@ -9,24 +9,26 @@ The following sections provide instructions for each stage.
 3. [Run your tracker](#3-run-your-tracker)
 4. [Submit to the evaluation server](#4-submit-to-the-evaluation-server)
 5. [Generate the plots for a paper](#5-generate-the-plots-for-a-paper)
-6. [Add your tracker to the results repo](#6-add-your-tracker-to-the-results-repo)
+6. [Add your tracker to the results page](#6-add-your-tracker-to-the-results-page)
 
 The challenge is split into two tracks: "constrained" and "open".
 To be eligible for the "constrained" challenge, a tracker must use *only* the data in `annotations/ytbb_train_constrained.csv` and `annotations/dev.csv` for development.
-All other trackers must enter the "open" challenge.
-**Note:** Development includes pre-training, validation and hyper-parameter search in addition to training.
+All other trackers must enter the "open" challenge. With *development* we intend, in addition to training, also pre-training, validation and hyper-parameter search.
 For example, SINT uses pre-trained weights and SiamFC is trained from scratch on ImageNet VID.
 Hence they are both in the "open" challenge.
 
-The results of all *citeable* trackers are maintained in a [results repo](https://github.com/oxuva/long-term-tracking-results/).
+The results of all *citeable* trackers are maintained in a [results repository](https://github.com/oxuva/long-term-tracking-results/).
 This repo should be used for comparison against state-of-the-art.
-It is updated periodically according to a [schedule](TODO).
+It is updated periodically according to a [schedule](https://docs.google.com/document/d/1BtoMzxMGfKMM7DtYOm44dXNr18HrG5CqN9cyxDAem-M/edit).
 
 
 ## 1. Obtain the data
 
 The ground-truth labels for the dev set can be found *in this repository* in [`dataset/annotations`](dataset/annotations).
 The tracker initialization for the dev *and* test sets can be found in [`dataset/tasks`](dataset/tasks).
+**Note:** Only the annotations for the *dev* set are public.
+These can be useful for diagnosing failures and hyperparameter search.
+For the *test* set, the annotations are secret and trackers can only be assessed via the evaluation server (explained later).
 
 To obtain the images, fill in [this form](https://docs.google.com/forms/d/e/1FAIpQLSepA_sLCMrqnZXBPnZFNmggf-MdEGa2Um-Q7pRGQt4SxvGNeg/viewform) and then download `images_dev.tar` and `images_test.tar`.
 Extract these archives in `dataset/`.
@@ -39,9 +41,6 @@ dataset/annotations/{subset}.csv
 ```
 where `{subset}` is either `dev` or `test`, `{video}` is the video ID e.g. `vid0042`, and `{frame:06d}` is the frame number e.g. `002934`.
 
-**Note:** Only the annotations for the *dev* set are public.
-These can be useful for diagnosing failures and hyperparameter search.
-For the *test* set, the annotations are secret and trackers can only be assessed via the evaluation server (explained later).
 
 ### Task format
 
@@ -101,7 +100,7 @@ source relative/path/to/long-term-tracking-benchmark/pythonpath.sh
 
 ## 3. Run your tracker
 
-**Note:** Unlike the VOT or OTB toolkits, our toolkit does not execute your tracker.
+**Note:** Unlike the VOT or OTB toolkits, ours does not execute your tracker.
 Your tracker should output all predictions in the format described below.
 For Python trackers, we provide the utility functions `oxuva.load_dataset_tasks_csv` and `oxuva.dump_predictions_csv` to make this easy.
 See [`examples/opencv/track.py`](examples/opencv/track.py) for an example.
@@ -131,24 +130,24 @@ If the object is predicted `absent`, then the score and the rectangle will not b
 
 ## 4. Submit to the evaluation server
 
-Since the annotations for the test set are secret, in order to evaluate your tracker and produce plots similar to the one in our paper you need to submit the raw prediction csv files to our [evaluation server (link todo)](https://competitions.codalab.org/competitions/19529#participate), hosted on CodaLab.
+Since the annotations for the test set are secret, in order to evaluate your tracker and produce plots similar to the one in our paper you need to submit the raw prediction csv files to the [evaluation server](https://competitions.codalab.org/competitions/19529#participate), hosted on CodaLab.
 
 First, create a CodaLab account (if you do not already have one) and request to join the OxUvA competition.
 Note that the CodaLab account is per human, not per tracker.
 Do *not* create a username for your tracker.
 The name of your tracker will appear when you add it to the results repo.
-The organisers will manually review your request to join the competition.
 
 To submit the results, create a zip archive containing all predictions in CSV format (as described above).
 There should be one file per object with the filename `{video}_{object}.csv`.
 It doesn't matter whether the CSV files are contained at the root level of the zip archive or below a single subdirectory of any name.
 If a submission encounters an error (for example, a missing prediction file), you will be able to view the verbose error log, and the submission will not count towards your quota.
 
-You can upload your predictions for the dev set to confirm that your predictions are in the correct format.
+(If you want, you can first upload your predictions for the dev set to confirm that your predictions are in the correct format.)
 
 Once the submission has been successful, you can download the generated output files.
 These will be used to generate the plots and submit to the results repo.
 
+**Note:** you will notice that the CodaLab challenge shows a leaderboard with usernames and scores. You can safely ignore it. What matters are the official plots (point 5 of this tutorial) and the state-of-the-art snapshot of our results reposityory (point 6).
 
 ## 5. Generate the plots for a paper
 
@@ -157,12 +156,14 @@ First, clone the results repo.
 git clone https://github.com/oxuva/long-term-tracking-results.git
 cd long-term-tracking-results
 ```
-This repo contains several snapshots of the past state-of-the-art as git tags.
+This repo contains several snapshots of the past state-of-the-art as git tags (*TODO* generate tags).
 The tag `eccv18` indicates the set of methods in our original paper, and successive tags are of the form `{year}-{month:02d}`, for example:
 ```bash
 git checkout 2018-07
 ```
+
 You can state in your paper which tag you are comparing against.
+When writing a paper, you are not required to compare against the most recent state-of-the-art... but clearly the most recent the better, as your results will be more convincing.
 
 Add an entry for your tracker to `trackers.json`.
 You must specify a human-readable name for your tracker, and whether your tracker is eligible for the constrained-data challenge.
@@ -201,12 +202,22 @@ Similarly, to just generate the main figure, use:
 ```bash
 python -m oxuva.tools.analyze plot_tpr_tnr --data=dev --challenge=open
 ```
+**Note:** please do *not* put the dev set plots in the paper.
+Trackers should be compared using the test set.
+
+## 6. Add your tracker to the results page
+
+Separately from the evaluation server, we are maintaining a [results page/repository](https://github.com/oxuva/long-term-tracking-results) that reflects the state-of-the-art on our dataset.
+
+In order to have your tracker added to the plots, you need to:
+
+1) Have completed all the previous points and produced the *test set plots of your tracker.
+2) Have a paper which described your tracker. It does not need to be a peer-reviewed conference - arXiv is fine, we just need a *citeable* method.
+3) Do a pull request to the results repository, containing everything we need to update the plots. In the comment section, please include a) the name of your method b) the paper describing it and c) if it qualifies for the open or constrained challenge and (optional) d) a (very) short description of your method. *TODO*: detail which files to include in the PR.
+4) The organizers will manually review your request according to [this schedule](https://docs.google.com/document/d/1BtoMzxMGfKMM7DtYOm44dXNr18HrG5CqN9cyxDAem-M/edit).
+
+**Note**: if your method does not make it to the top, don't be shy. There are two benefits of submitting not top performing trackers: a) for the community, it is important to have a broader picture of what is being tried b) for you, it will increase your chances of having your paper read and cited.
 
 
-## 6. Add your tracker to the results repo
 
-- Need a paper with results on it (because we need a reference and description)
-- Do a PR
-- Does not matter if it is at the top, it allows to other people to cite your work. 
-- (Please do not share results post-codalab pre-pr online.)
 
