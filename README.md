@@ -142,10 +142,12 @@ There should be one file per object with the filename `{video}_{object}.csv`.
 It doesn't matter whether the CSV files are contained at the root level of the zip archive or below a single subdirectory of any name.
 If a submission encounters an error (for example, a missing prediction file), you will be able to view the verbose error log, and the submission will not count towards your quota.
 
+(If you want, you can first upload your predictions for the dev set to confirm that your predictions are in the correct format.)
+
 Once the submission has been successful, you can download the generated output files.
 These will be used to generate the plots and submit to the results repo.
 
-**Note:** if you want, you can first upload your predictions for the dev set to confirm that your predictions are in the correct format.
+**Note:** you will notice that the CodaLab challenge shows a leaderboard with usernames and scores. You can safely ignore it. What matters for comparison are the official plots (point 5 of this tutorial) and the state-of-the-art snapshot of our results reposityory (point 6).
 
 ## 5. Generate the plots for a paper
 
