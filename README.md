@@ -135,7 +135,8 @@ Since the annotations for the test set are secret, in order to evaluate your tra
 First, create a CodaLab account (if you do not already have one) and request to join the OxUvA competition.
 Note that the CodaLab account is per human, not per tracker.
 Do *not* create a username for your tracker.
-The name of your tracker will appear when you add it to the results repo.
+The name of your tracker will appear when you add it to the results repository (point 6 of this tutorial.
+**Note:** since we need to approve all the request (to make sure there are not multiple entries) your request might be pending for a few hours.
 
 To submit the results, create a zip archive containing all predictions in CSV format (as described above).
 There should be one file per object with the filename `{video}_{object}.csv`.
