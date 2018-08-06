@@ -202,8 +202,8 @@ Similarly, to just generate the main figure, use:
 ```bash
 python -m oxuva.tools.analyze plot_tpr_tnr --data=dev --challenge=open
 ```
-**Note:** please do *not* put the dev set plots in the paper.
-Trackers should be compared using the test set.
+**Note:** please do *not* put the dev set plots in the paper without the test set.
+In general, trackers should be compared using the test set.
 
 ## 6. Add your tracker to the results page
 
@@ -213,7 +213,7 @@ In order to have your tracker added to the plots, you need to:
 
 1) Have completed all the previous points and produced the *test set plots of your tracker.
 2) Have a paper which described your tracker. It does not need to be a peer-reviewed conference - arXiv is fine, we just need a *citeable* method.
-3) Do a pull request to the results repository, containing everything we need to update the plots. In the comment section, please include a) the name of your method b) the paper describing it and c) if it qualifies for the open or constrained challenge and (optional) d) a (very) short description of your method. *TODO*: detail which files to include in the PR.
+3) Do a pull request to the results repository, containing everything we need to update the plots (i.e. `assess/test/{tracker_name}/iou_0d{3,5,7}.json`. In the comment section, please include a) the name of your method b) the paper describing it and c) if it qualifies for the open or constrained challenge and (optional) d) a (very) short description of your method. *TODO*: detail which files to include in the PR.
 4) The organizers will manually review your request according to [this schedule](https://docs.google.com/document/d/1BtoMzxMGfKMM7DtYOm44dXNr18HrG5CqN9cyxDAem-M/edit).
 
 **Note**: if your method does not make it to the top, don't be shy. There are two benefits of submitting not top performing trackers: a) for the community, it is important to have a broader picture of what is being tried b) for you, it will increase your chances of having your paper read and cited.
