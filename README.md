@@ -136,18 +136,16 @@ First, create a CodaLab account (if you do not already have one) and request to 
 Note that the CodaLab account is per human, not per tracker.
 Do *not* create a username for your tracker.
 The name of your tracker will appear when you add it to the results repo.
-The organisers will manually review your request to join the competition.
 
 To submit the results, create a zip archive containing all predictions in CSV format (as described above).
 There should be one file per object with the filename `{video}_{object}.csv`.
 It doesn't matter whether the CSV files are contained at the root level of the zip archive or below a single subdirectory of any name.
 If a submission encounters an error (for example, a missing prediction file), you will be able to view the verbose error log, and the submission will not count towards your quota.
 
-You can upload your predictions for the dev set to confirm that your predictions are in the correct format.
-
 Once the submission has been successful, you can download the generated output files.
 These will be used to generate the plots and submit to the results repo.
 
+**Note:** if you want, you can first upload your predictions for the dev set to confirm that your predictions are in the correct format.
 
 ## 5. Generate the plots for a paper
 
@@ -204,13 +202,14 @@ python -m oxuva.tools.analyze plot_tpr_tnr --data=dev --challenge=open
 
 ## 6. Add your tracker to the results page
 
-Separately from the CodaLab evaluation server, we are maintaining a [results page/repository](https://github.com/oxuva/long-term-tracking-results) (updated roughly once a month) that reflects the state-of-the-art on our dataset.
+Separately from the CodaLab evaluation server, we are maintaining a [results page/repository](https://github.com/oxuva/long-term-tracking-results) that reflects the state-of-the-art on our dataset.
 
 In order to have your tracker added to the plots, you need to:
 
 1) Have completed all the previous points and produced the test set plots of your tracker.
 2) Have a paper which described your tracker. It does not need to be a peer-reviewed conference - arXiv is fine, we just need a *citeable* method.
 3) Do a pull request to the results repository, containing everything we need to update the plots. In the comment section, please include a) the name of your method b) the paper describing it and c) if it qualifies for the open or constrained challenge and (optional) d) a (very) short description of your method. *TODO*: detail which files to include in the PR.
+4) The organizers will manually review your request according to [this schedule](https://docs.google.com/document/d/1BtoMzxMGfKMM7DtYOm44dXNr18HrG5CqN9cyxDAem-M/edit).
 
 **Note**: if your method does not make it to the top, don't be shy. There are two benefits of submitting not top performing trackers: a) for the community, it is important to have a broader picture of what is being tried b) for you, it will increase your chances of having your paper read and cited.
 
