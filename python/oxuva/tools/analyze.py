@@ -264,9 +264,8 @@ def _load_tasks_with_annotations(fname):
 def _print_statistics(assessments, trackers, names=None):
     fields = ['TPR', 'TNR', 'GM', 'MaxGM']
     if args.bootstrap:
-        # Include xxx_mean and xxx_var keys too.
-        fields = list(itertools.chain.from_iterable(
-            [key, key + '_mean', key + '_var'] for key in fields))
+        # Include xxx_var keys too.
+        fields = list(itertools.chain.from_iterable([key, key + '_var'] for key in fields))
     names = names or {}
     stats = {tracker: {iou: (
         oxuva.dataset_quality(assessments[tracker][iou]['totals'],
