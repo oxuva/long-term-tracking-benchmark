@@ -1,5 +1,5 @@
 # OxUvA long-term tracking benchmark [ECCV'18]
-**Note:** *if, while reading this tutorial, you are stuck somewhere or you are unsure you are interpreting the instructions correctly, do not hesitate to open an issue here on GitHub.*
+**Note:** *If, while reading this tutorial, you are stuck somewhere or you are unsure you are interpreting the instructions correctly, do not hesitate to open an issue here on GitHub.*
 
 This repository provides Python code to measure the quality of a tracker's predictions and generate all figures of the paper.
 The following sections provide instructions for each stage.
@@ -90,11 +90,11 @@ pip install -r requirements.txt
 
 You must also add the parent directory of `oxuva/` to `PYTHONPATH` to be able to import the `oxuva` package.
 ```bash
-export PYTHONPATH="/absolute/path/to/long-term-tracking-benchmark/python:$PYTHONPATH"
+export PYTHONPATH="path/to/long-term-tracking-benchmark/python:$PYTHONPATH"
 ```
 Alternatively, for convenience, you can `source` the script `pythonpath.sh` in `bash`:
 ```bash
-source relative/path/to/long-term-tracking-benchmark/pythonpath.sh
+source path/to/long-term-tracking-benchmark/pythonpath.sh
 ```
 
 
@@ -110,22 +110,20 @@ If the object extends beyond the image boundary, ground-truth rectangles are cli
 
 ### Prediction format
 
-The predictions for a tracker are specified with one file per object.
-The directory structure must be:
-```
-predictions/{subset}/{tracker}/{video}_{object}.csv
-```
-The fields of this CSV file are:
+The predictions for a tracker are specified with one CSV file per track.
+The names of these files must be `{video}_{object}.csv`.
+The fields of these CSV files are:
 
 * `video_id`: (string) Name of video.
 * `object_id`: (string) Name of object within the video.
 * `frame_num`: (integer) Frame of current annotation.
-* `present`: (string) Either `present` or `absent`.
+* `present`: (string) Either `present` or `absent` (can use `true`/`false` or `0`/`1` too)
 * `score`: (float) Number that represents confidence of object presence.
 * `xmin`, `xmax`, `ymin`, `ymax`: (float) Rectangle in the current frame if present, otherwise it is ignored.
 
 The score is only used for diagnostics, it does not affect the main evaluation of the tracker.
 If the object is predicted `absent`, then the score and the rectangle will not be used.
+Since the ground-truth annotations do not extend beyond the edge of the image, the evaluation toolkit will truncate the predicted rectangles to the image frame before computing the IOU.
 
 
 ## 4. Submit to the evaluation server
@@ -135,20 +133,22 @@ Since the annotations for the test set are secret, in order to evaluate your tra
 First, create a CodaLab account (if you do not already have one) and request to join the OxUvA competition.
 Note that the CodaLab account is per human, not per tracker.
 Do *not* create a username for your tracker.
-The name of your tracker will appear when you add it to the results repository (point 6 of this tutorial.
-**Note:** since we need to approve all the request (to make sure there are not multiple entries) your request might be pending for a few hours.
+The name of your tracker will appear when you add it to the results repository (point 6 of this tutorial).
+**Note:** Since we need to approve all the requests (to make sure that people do not create multiple accounts) your request might be pending for a few hours.
+Please choose a username that enables us to identify you, such as your real name or your GitHub account.
 
 To submit the results, create a zip archive containing all predictions in CSV format (as described above).
 There should be one file per object with the filename `{video}_{object}.csv`.
 It doesn't matter whether the CSV files are contained at the root level of the zip archive or below a single subdirectory of any name.
 If a submission encounters an error (for example, a missing prediction file), you will be able to view the verbose error log, and the submission will not count towards your quota.
-
 (If you want, you can first upload your predictions for the dev set to confirm that your predictions are in the correct format.)
 
 Once the submission has been successful, you can download the generated output files.
 These will be used to generate the plots and submit to the results repo.
 
-**Note:** you will notice that the CodaLab challenge shows a leaderboard with usernames and scores. You can safely ignore it. What matters are the official plots (point 5 of this tutorial) and the state-of-the-art snapshot of our results reposityory (point 6).
+**Note:** You will notice that the CodaLab challenge shows a leaderboard with usernames and scores.
+For the purpose of writing a paper, you do not need to compare against the most recent methods: what matters are the state-of-the-art results for citeable trackers in the results repository (point 6).
+
 
 ## 5. Generate the plots for a paper
 
@@ -174,21 +174,23 @@ You must specify a human-readable name for your tracker, and whether your tracke
 Use `python -m json.tool --sort-keys` to standardize the formatting and order of this file.
 
 For the test set, copy the `iou_0dx.json` files returned by the evaluation server to the directory
-```assess/test/{tracker_id}/```
+```results/assess/test/{tracker_id}/```
+in the results repo.
 The script `oxuva.tools.analyze` will try to load this summary of the tracker assessment from these files before attempting to read the complete predictions of the tracker and the ground-truth annotations.
 
 For the dev set, you may follow the same procedure as above.
 However, it is possible to evaluate your tracker's predictions locally, without using the evaluation server.
 To do this, put the CSV files of your tracker's predictions (that is, the input to the evaluation server) in the directory
 ```predictions/dev/{tracker_id}/```
+in the results repo.
 The script will generate the corresponding files in the `assess/` directory.
-Note that if you update the predictions, you should erase the corresponding files in the `assess/` directory, or use `--ignore_cache`.
+Note that if you update the predictions, you should erase the corresponding files in the `assess/` directory, or specify `--no_use_summary`.
 If desired, the predictions of other trackers on the *dev* set are available from Google Drive (TODO).
 Please do not publish your predictions on the *test* set, as it may enable someone to construct an approximate ground-truth using a consensus method.
 
-To generate all plots and tables:
+To generate all plots and tables, use `analyze_paper.sh` or `analyze_web.sh`:
 ```bash
-bash analyze_all.sh --data=test --challenge=open --loglevel=warning
+bash analyze_paper.sh --data=test --challenge=open --loglevel=warning
 ```
 
 To just generate the table of results:
@@ -203,8 +205,9 @@ Similarly, to just generate the main figure, use:
 ```bash
 python -m oxuva.tools.analyze plot_tpr_tnr --data=dev --challenge=open
 ```
-**Note:** please do *not* put the dev set plots in the paper without the test set.
+**Note:** Please do *not* put the dev set plots in the paper without the test set.
 In general, comparison statements of the type *A is better than B* should be done using the test set.
+
 
 ## 6. Add your tracker to the results page
 
@@ -212,13 +215,9 @@ Separately from the evaluation server, we are maintaining a [results page/reposi
 
 In order to have your tracker added to the plots, you need to:
 
-1) Have completed all the previous points and produced the *test set plots of your tracker.
-2) Have a paper which described your tracker. It does not need to be a peer-reviewed conference - arXiv is fine, we just need a *citeable* method.
-3) Do a pull request to the results repository, containing everything we need to update the plots (i.e. `assess/test/{tracker_name}/iou_0d{3,5,7}.json`. In the comment section, please include a) the name of your method b) the paper describing it and c) if it qualifies for the open or constrained challenge and (optional) d) a (very) short description of your method. *TODO*: detail which files to include in the PR.
+1) Have completed all the previous points and produced the test set plots of your tracker.
+2) Have a document that describes your tracker. It does not need to be a peer-reviewed conference - arXiv is fine - we just need a *citeable* method.
+3) Do a pull request to the results repository, containing everything we need to update the plots (i.e. `assess/test/{tracker_name}/iou_0d{3,5,7}.json`. Remember to specify the name of your tracker and whether it qualifies for the constrained challenge in `trackers.json`. In the comment section, please include a) your CodaLab username, b) the paper that describes your method and optionally d) a short description of your method. Do not include the generated plots, we will update these after merging the pull request.
 4) The organizers will manually review your request according to [this schedule](https://docs.google.com/document/d/1BtoMzxMGfKMM7DtYOm44dXNr18HrG5CqN9cyxDAem-M/edit).
 
-**Note**: if your method does not make it to the top, don't be shy. There are two benefits of submitting not top performing trackers: a) for the community, it is important to have a broader picture of what is being tried b) for you, it will increase your chances of having your paper read and cited.
-
-
-
-
+Remember that even if your method is not in first place, submitting your tracker to the results repository is valuable to the community and it increases the chance of having your paper read and cited.
