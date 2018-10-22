@@ -134,7 +134,6 @@ First, create a CodaLab account (if you do not already have one) and request to 
 Note that the CodaLab account is per human, not per tracker.
 Do *not* create a username for your tracker.
 The name of your tracker will appear when you add it to the results repository (point 6 of this tutorial).
-**Note:** Since we need to approve all the requests (to make sure that people do not create multiple accounts) your request might be pending for a few hours.
 Please choose a username that enables us to identify you, such as your real name or your GitHub account.
 
 To submit the results, create a zip archive containing all predictions in CSV format (as described above).
@@ -142,6 +141,7 @@ There should be one file per object with the filename `{video}_{object}.csv`.
 It doesn't matter whether the CSV files are contained at the root level of the zip archive or below a single subdirectory of any name.
 If a submission encounters an error (for example, a missing prediction file), you will be able to view the verbose error log, and the submission will not count towards your quota.
 (If you want, you can first upload your predictions for the dev set to confirm that your predictions are in the correct format.)
+Please consider that for the dev set your quota is of 500 submissions in total (max 50 per day), while for the test set the limit is of *10 submissions in total (max 1 per day)*.
 
 Once the submission has been successful, you can download the generated output files.
 These will be used to generate the plots and submit to the results repo.
