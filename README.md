@@ -12,7 +12,7 @@ The following sections provide instructions for each stage.
 6. [Add your tracker to the results page](#6-add-your-tracker-to-the-results-page)
 
 The challenge is split into two tracks: "constrained" and "open".
-To be eligible for the "constrained" challenge, a tracker must use *only* the data in `annotations/ytbb_train_constrained.csv` and `annotations/dev.csv` for development.
+To be eligible for the "constrained" challenge, a tracker must use *only* the data in `annotations/dev_constrained_ytbb_train.csv` and `annotations/dev.csv` for development.
 All other trackers must enter the "open" challenge. With *development* we intend, in addition to training, also pre-training, validation and hyper-parameter search.
 For example, SINT uses pre-trained weights and SiamFC is trained from scratch on ImageNet VID.
 Hence they are both in the "open" challenge.
